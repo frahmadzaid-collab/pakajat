@@ -1,5 +1,7 @@
 import { useState } from "react";
-
+import { useEffect } from "react"
+import { supabase } from "./supabase"
+import Login from "./pages/Login"
 const C = {
   orange: "#F26522", dark: "#D4521A",
   light: "#FFF4EE", white: "#FFFFFF",
@@ -520,6 +522,22 @@ const Profile = ()=>(
 // ── APP ROOT ──────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState("home");
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    })
+    return () => subscription.unsubscribe()
+  }, []);
+
+  if (loading) return <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontFamily:'Tajawal,sans-serif'}}>جاري التحميل...</div>
+  if (!session) return <Login />
   const tabs = [
     {id:"home",icon:"🏠",label:"الرئيسية"},
     {id:"request",icon:"✈️",label:"طلب رحلة"},
