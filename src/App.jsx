@@ -547,33 +547,77 @@ const Offers = ()=>{
 };
 // ── TRIPS ─────────────────────────────────────────────────────────
 const Trips = ()=>{
-  const trips=[
-    {dest:"إسطنبول",date:"مارس ٢٠٢٦",price:"٤,٢٠٠",svcs:4},
-    {dest:"دبي",date:"يناير ٢٠٢٦",price:"٢,٨٠٠",svcs:3},
-    {dest:"ماليزيا",date:"نوفمبر ٢٠٢٥",price:"٣,٥٠٠",svcs:5},
-  ];
+  const [trips, setTrips] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(()=>{
+    fetchTrips()
+  },[])
+
+  const fetchTrips = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data } = await supabase
+      .from('trip_requests')
+      .select('*, offers(count)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    setTrips(data || [])
+    setLoading(false)
+  }
+
+  const deleteTrip = async (id) => {
+    await supabase.from('trip_requests').delete().eq('id', id)
+    fetchTrips()
+  }
+
+  if (loading) return <div style={{textAlign:'center',padding:40,color:C.gray}}>جاري التحميل...</div>
+
   return(
     <div style={{padding:"16px 20px 24px"}}>
-      <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:16}}>رحلاتي 🗺️</div>
+      <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>رحلاتي 🗺️</div>
+      <div style={{fontSize:13,color:C.gray,marginBottom:16}}>{trips.length} طلبات رحلة</div>
+
+      {trips.length === 0 && (
+        <div style={{textAlign:'center',padding:40,background:C.white,borderRadius:16,border:`1px solid ${C.border}`}}>
+          <div style={{fontSize:32,marginBottom:8}}>✈️</div>
+          <div style={{fontSize:15,color:C.gray}}>لا توجد رحلات بعد</div>
+          <div style={{fontSize:13,color:C.gray,marginTop:4}}>ابدأ بطلب رحلتك الأولى!</div>
+        </div>
+      )}
+
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {trips.map((t,i)=>(
-          <div key={i} style={{background:C.white,borderRadius:16,padding:"15px 16px",border:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        {trips.map((t)=>(
+          <div key={t.id} style={{background:C.white,borderRadius:16,padding:"15px 16px",border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
               <div>
-                <div style={{fontSize:16,fontWeight:700,color:C.ink,marginBottom:3}}>🌍 {t.dest}</div>
-                <div style={{fontSize:12,color:C.gray}}>{t.date} · {t.svcs} خدمات</div>
+                <div style={{fontSize:16,fontWeight:700,color:C.ink,marginBottom:3}}>🌍 {t.destination}</div>
+                <div style={{fontSize:12,color:C.gray}}>👥 {t.travelers} مسافرين</div>
+                <div style={{fontSize:11,color:C.gray,marginTop:2}}>📅 {new Date(t.created_at).toLocaleDateString('ar-SA')}</div>
+                {t.notes && <div style={{fontSize:12,color:C.gray,marginTop:4,background:C.muted,borderRadius:6,padding:'4px 8px'}}>{t.notes}</div>}
               </div>
-              <div style={{textAlign:"left"}}>
-                <div style={{fontSize:16,fontWeight:800,color:C.orange}}>{t.price}</div>
-                <div style={{background:C.greenBg,color:C.green,borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700,marginTop:3}}>مكتملة</div>
+              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
+                <span style={{background:t.status==='open'?C.greenBg:C.muted,color:t.status==='open'?C.green:C.gray,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+                  {t.status==='open'?'مفتوح':'مغلق'}
+                </span>
+                <span style={{background:C.blueBg,color:C.blue,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+                  💬 {t.offers?.[0]?.count || 0} عروض
+                </span>
               </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginTop:10}}>
+              <button onClick={()=>alert('قريباً!')} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:10,padding:'10px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                💬 عرض العروض
+              </button>
+              <button onClick={()=>deleteTrip(t.id)} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:10,padding:'10px',fontFamily:'inherit',fontSize:13,cursor:'pointer',fontWeight:600}}>
+                حذف
+              </button>
             </div>
           </div>
         ))}
       </div>
     </div>
-  );
-};
+  )
+}
 
 // ── PROFILE ───────────────────────────────────────────────────────
 const Profile = ()=>{
