@@ -576,37 +576,174 @@ const Trips = ()=>{
 };
 
 // ── PROFILE ───────────────────────────────────────────────────────
-  const Profile = ()=>{
+const Profile = ()=>{
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordSaved, setPasswordSaved] = useState(false)
+
+  useEffect(()=>{
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user)
+      setName(user?.user_metadata?.full_name || '')
+      setAvatarUrl(user?.user_metadata?.avatar_url || null)
+      setLoading(false)
+    })
+  },[])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
   }
+
+  const handleSave = async () => {
+    setSaving(true)
+    await supabase.auth.updateUser({ data: { full_name: name } })
+    setSaving(false)
+    setSaved(true)
+    setEditing(false)
+    setTimeout(() => setSaved(false), 3000)
+  }
+
+  const handleAvatar = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploadingAvatar(true)
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${user.id}.${fileExt}`
+    await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
+    const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
+    await supabase.auth.updateUser({ data: { avatar_url: data.publicUrl } })
+setAvatarUrl(data.publicUrl + '?t=' + Date.now())
+    setUploadingAvatar(false)
+  }
+
+  const handlePasswordChange = async () => {
+    if (!newPassword || newPassword.length < 6) return
+    setSaving(true)
+    await supabase.auth.updateUser({ password: newPassword })
+    setSaving(false)
+    setPasswordSaved(true)
+    setChangingPassword(false)
+    setNewPassword('')
+    setTimeout(() => setPasswordSaved(false), 3000)
+  }
+
+  if (loading) return <div style={{textAlign:'center',padding:40,color:C.gray}}>جاري التحميل...</div>
+
   return(
-  <div style={{padding:"16px 20px 24px"}}>
-    <div style={{textAlign:"center",padding:"20px 0 24px"}}>
-      <div style={{width:80,height:80,borderRadius:"50%",background:`linear-gradient(135deg,${C.orange},${C.dark})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",fontSize:32,color:C.white,fontWeight:800}}>م</div>
-      <div style={{fontSize:20,fontWeight:800,color:C.ink}}>محمد العمري</div>
-      <div style={{fontSize:14,color:C.gray,marginTop:2}}>+966 50 123 4567</div>
-    </div>
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {[["✈️","رحلاتي","١٢ رحلة مكتملة"],["💬","العروض المقبولة","٨ عروض"],["🔔","الإشعارات","مفعّلة"],["🔒","الخصوصية والأمان",""],["📞","تواصل معنا","الدعم ٢٤/٧"]].map(([icon,title,sub])=>(
-        <div key={title} style={{display:"flex",alignItems:"center",gap:13,background:C.white,borderRadius:13,padding:"14px 16px",border:`1px solid ${C.border}`,cursor:"pointer"}}>
-          <span style={{fontSize:20}}>{icon}</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:14,fontWeight:600,color:C.ink}}>{title}</div>
-            {sub&&<div style={{fontSize:12,color:C.gray,marginTop:1}}>{sub}</div>}
-          </div>
-          <span style={{color:C.gray,fontSize:16}}>‹</span>
+    <div style={{padding:"16px 20px 24px"}}>
+      <div style={{textAlign:"center",padding:"20px 0 24px"}}>
+        
+        {/* الصورة الشخصية */}
+        <div style={{position:'relative',width:80,height:80,margin:'0 auto 12px'}}>
+          {avatarUrl ? (
+            <img src={avatarUrl} style={{width:80,height:80,borderRadius:'50%',objectFit:'cover'}} />
+          ) : (
+            <div style={{width:80,height:80,borderRadius:"50%",background:`linear-gradient(135deg,${C.orange},${C.dark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,color:C.white,fontWeight:800}}>
+              {name?.charAt(0) || user?.email?.charAt(0) || "م"}
+            </div>
+          )}
+          <label style={{position:'absolute',bottom:0,left:0,width:26,height:26,borderRadius:'50%',background:C.orange,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:13}}>
+            {uploadingAvatar ? '⏳' : '📷'}
+            <input type="file" accept="image/*" onChange={handleAvatar} style={{display:'none'}} />
+          </label>
         </div>
-      ))}
-   </div>
-    <div onClick={handleLogout} style={{display:"flex",alignItems:"center",gap:13,background:"#FEF2F2",borderRadius:13,padding:"14px 16px",border:"1px solid #FECACA",cursor:"pointer",marginTop:8}}>
-      <span style={{fontSize:20}}>🚪</span>
-      <div style={{flex:1}}>
-        <div style={{fontSize:14,fontWeight:600,color:"#DC2626"}}>تسجيل الخروج</div>
+
+        {editing ? (
+          <input value={name} onChange={e=>setName(e.target.value)}
+            style={{textAlign:'center',fontSize:18,fontWeight:800,border:`1.5px solid ${C.orange}`,borderRadius:10,padding:'8px 14px',fontFamily:'inherit',outline:'none',direction:'rtl',width:'100%',marginBottom:8}}
+          />
+        ) : (
+          <div style={{fontSize:20,fontWeight:800,color:C.ink}}>{name || "مستخدم بكجات"}</div>
+        )}
+        <div style={{fontSize:14,color:C.gray,marginTop:2}}>{user?.email}</div>
+
+        {!editing ? (
+          <button onClick={()=>setEditing(true)} style={{marginTop:10,background:C.light,color:C.orange,border:`1px solid ${C.orange}33`,borderRadius:20,padding:'6px 18px',fontFamily:'inherit',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+            ✏️ تعديل الاسم
+          </button>
+        ) : (
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:10}}>
+            <button onClick={handleSave} disabled={saving} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:10,padding:'8px 20px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+              {saving?'جاري الحفظ...':'حفظ'}
+            </button>
+            <button onClick={()=>setEditing(false)} style={{background:C.muted,color:C.gray,border:'none',borderRadius:10,padding:'8px 16px',fontFamily:'inherit',fontSize:13,cursor:'pointer'}}>
+              إلغاء
+            </button>
+          </div>
+        )}
+
+        {saved && <div style={{color:C.green,fontSize:13,marginTop:8,fontWeight:600}}>✅ تم حفظ الاسم!</div>}
+        {passwordSaved && <div style={{color:C.green,fontSize:13,marginTop:8,fontWeight:600}}>✅ تم تغيير كلمة السر!</div>}
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        
+        {/* تغيير كلمة السر */}
+        <div style={{background:C.white,borderRadius:13,padding:"14px 16px",border:`1px solid ${C.border}`}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{display:'flex',alignItems:'center',gap:13}}>
+              <span style={{fontSize:20}}>🔒</span>
+              <div>
+                <div style={{fontSize:14,fontWeight:600,color:C.ink}}>كلمة السر</div>
+                <div style={{fontSize:12,color:C.gray}}>تغيير كلمة السر الحالية</div>
+              </div>
+            </div>
+            <button onClick={()=>setChangingPassword(!changingPassword)} style={{background:C.light,color:C.orange,border:'none',borderRadius:8,padding:'5px 12px',fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer'}}>
+              {changingPassword?'إلغاء':'تغيير'}
+            </button>
+          </div>
+          {changingPassword && (
+            <div style={{marginTop:12}}>
+              <input type="password" placeholder="كلمة السر الجديدة (٦ أحرف على الأقل)" value={newPassword}
+                onChange={e=>setNewPassword(e.target.value)}
+                style={{width:'100%',border:`1.5px solid ${C.border}`,borderRadius:10,padding:'10px 13px',fontFamily:'inherit',fontSize:13,outline:'none',boxSizing:'border-box',direction:'rtl',marginBottom:8}}
+                onFocus={e=>e.target.style.borderColor=C.orange}
+                onBlur={e=>e.target.style.borderColor=C.border}
+              />
+              <button onClick={handlePasswordChange} disabled={saving} style={{width:'100%',background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:10,padding:'10px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                {saving?'جاري الحفظ...':'حفظ كلمة السر'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* تواصل معنا */}
+        <a href="https://wa.me/00966592244551" target="_blank" rel="noopener" style={{display:"flex",alignItems:"center",gap:13,background:C.white,borderRadius:13,padding:"14px 16px",border:`1px solid ${C.border}`,textDecoration:'none'}}>
+          <span style={{fontSize:20}}>📞</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:600,color:C.ink}}>تواصل معنا</div>
+            <div style={{fontSize:12,color:C.gray}}>واتساب — الدعم ٢٤/٧</div>
+          </div>
+          <span style={{color:C.green,fontSize:13,fontWeight:700}}>واتساب ↗</span>
+        </a>
+
+        {/* البريد */}
+        <div style={{display:"flex",alignItems:"center",gap:13,background:C.white,borderRadius:13,padding:"14px 16px",border:`1px solid ${C.border}`}}>
+          <span style={{fontSize:20}}>✉️</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:600,color:C.ink}}>البريد الإلكتروني</div>
+            <div style={{fontSize:12,color:C.gray}}>{user?.email}</div>
+          </div>
+        </div>
+
+        {/* تسجيل الخروج */}
+        <div onClick={handleLogout} style={{display:"flex",alignItems:"center",gap:13,background:"#FEF2F2",borderRadius:13,padding:"14px 16px",border:"1px solid #FECACA",cursor:"pointer",marginTop:8}}>
+          <span style={{fontSize:20}}>🚪</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:600,color:"#DC2626"}}>تسجيل الخروج</div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
 }
 
 // ── APP ROOT ──────────────────────────────────────────────────────
