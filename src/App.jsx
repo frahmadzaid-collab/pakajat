@@ -436,46 +436,95 @@ const Request = ({setPage})=>{
 
 // ── OFFERS ────────────────────────────────────────────────────────
 const Offers = ()=>{
-  const offers=[
-    {co:"رحلات النخيل",dest:"إسطنبول ٧ أيام",price:"٤,٢٠٠",rating:"4.9",badge:"الأفضل سعراً",svcs:["✈️","🏨","🚖","🎟️"],hot:true},
-    {co:"السفر الذهبي",dest:"إسطنبول ٧ أيام",price:"٤,٨٠٠",rating:"4.7",badge:"موصى به",svcs:["✈️","🏨","📱"],hot:false},
-    {co:"أجنحة العرب",dest:"إسطنبول VIP",price:"٥,١٠٠",rating:"4.8",badge:"الأشمل",svcs:["✈️","🏨","🚖 VIP","🎟️","📋"],hot:false},
-  ];
+  const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    fetchOffers();
+  },[]);
+
+  const fetchOffers = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    // جلب طلبات المسافر
+    const { data: requests } = await supabase
+      .from('trip_requests')
+      .select('id')
+      .eq('user_id', user.id)
+    
+    if (!requests || requests.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    const requestIds = requests.map(r => r.id)
+
+    // جلب العروض على طلباته
+    const { data } = await supabase
+      .from('offers')
+      .select('*, trip_requests(destination, travelers)')
+      .in('request_id', requestIds)
+      .order('created_at', { ascending: false })
+
+    setOffers(data || []);
+    setLoading(false);
+  }
+
+  const acceptOffer = async (offerId) => {
+    await supabase
+      .from('offers')
+      .update({ status: 'accepted' })
+      .eq('id', offerId)
+    fetchOffers();
+  }
+
   return(
     <div style={{padding:"16px 20px 24px"}}>
       <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>العروض الواردة 💬</div>
-      <div style={{fontSize:13,color:C.gray,marginBottom:14}}>٣ عروض على طلبك</div>
+      <div style={{fontSize:13,color:C.gray,marginBottom:14}}>{offers.length} عروض على طلباتك</div>
+
+      {loading && <div style={{textAlign:"center",padding:40,color:C.gray}}>جاري التحميل...</div>}
+
+      {!loading && offers.length === 0 && (
+        <div style={{textAlign:"center",padding:40,background:C.white,borderRadius:16,border:`1px solid ${C.border}`}}>
+          <div style={{fontSize:32,marginBottom:8}}>📭</div>
+          <div style={{fontSize:15,color:C.gray}}>لا توجد عروض بعد</div>
+          <div style={{fontSize:13,color:C.gray,marginTop:4}}>أرسل طلب رحلة وانتظر العروض</div>
+        </div>
+      )}
+
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {offers.map((o,i)=>(
-          <div key={i} style={{background:C.white,borderRadius:16,padding:"16px",border:`1.5px solid ${o.hot?C.orange:C.border}`,boxShadow:o.hot?`0 0 0 3px ${C.orange}12`:"none"}}>
+          <div key={o.id} style={{background:C.white,borderRadius:16,padding:"16px",border:`1.5px solid ${o.status==='accepted'?C.green:i===0?C.orange:C.border}`,boxShadow:i===0?`0 0 0 3px ${C.orange}12`:"none"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
-                  <span style={{fontSize:16,fontWeight:700,color:C.ink}}>{o.co}</span>
-                  <span style={{background:o.hot?C.orange:C.light,color:o.hot?C.white:C.orange,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>{o.badge}</span>
+                  <span style={{fontSize:16,fontWeight:700,color:C.ink}}>🏢 شركة سياحية</span>
+                  {o.status==='accepted' && <span style={{background:C.greenBg,color:C.green,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>مقبول ✓</span>}
                 </div>
-                <div style={{fontSize:13,color:C.gray}}>{o.dest}</div>
-                <div style={{fontSize:12,color:C.gray}}>⭐ {o.rating}</div>
+                <div style={{fontSize:13,color:C.gray}}>🌍 {o.trip_requests?.destination}</div>
+                <div style={{fontSize:11,color:C.gray,marginTop:2}}>{new Date(o.created_at).toLocaleDateString('ar-SA')}</div>
               </div>
               <div style={{textAlign:"left"}}>
                 <div style={{fontSize:24,fontWeight:900,color:C.orange}}>{o.price}</div>
-                <div style={{fontSize:11,color:C.gray}}>ريال / شخص</div>
+                <div style={{fontSize:11,color:C.gray}}>ريال</div>
               </div>
             </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
-              {o.svcs.map(sv=><span key={sv} style={{background:C.muted,borderRadius:8,padding:"3px 9px",fontSize:12}}>{sv}</span>)}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
-              <button style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"11px",fontFamily:"inherit",fontWeight:700,fontSize:14,cursor:"pointer"}}>✓ قبول العرض</button>
-              <button style={{background:C.muted,color:C.gray,border:"none",borderRadius:10,padding:"11px",fontFamily:"inherit",fontSize:13,cursor:"pointer"}}>التفاصيل</button>
-            </div>
+            {o.description && (
+              <div style={{fontSize:13,color:C.ink,background:C.muted,borderRadius:8,padding:"8px 12px",marginBottom:12}}>{o.description}</div>
+            )}
+            {o.status !== 'accepted' && (
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
+                <button onClick={()=>acceptOffer(o.id)} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"11px",fontFamily:"inherit",fontWeight:700,fontSize:14,cursor:"pointer"}}>✓ قبول العرض</button>
+                <button style={{background:C.muted,color:C.gray,border:"none",borderRadius:10,padding:"11px",fontFamily:"inherit",fontSize:13,cursor:"pointer"}}>التفاصيل</button>
+              </div>
+            )}
           </div>
         ))}
       </div>
     </div>
   );
 };
-
 // ── TRIPS ─────────────────────────────────────────────────────────
 const Trips = ()=>{
   const trips=[
