@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useEffect } from "react"
 import { supabase } from "./supabase"
 import Login from "./pages/Login"
+import CompanyDashboard from "./CompanyDashboard"
 const C = {
   orange: "#F26522", dark: "#D4521A",
   light: "#FFF4EE", white: "#FFFFFF",
@@ -548,8 +549,9 @@ export default function App() {
   }, []);
 
   if (loading) return <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontFamily:'Tajawal,sans-serif'}}>جاري التحميل...</div>
-  if (!session) return <Login />
-  const tabs = [
+if (!session) return <Login />
+if (session?.user?.user_metadata?.role === 'company') return <CompanyDashboard />
+const tabs = [
     {id:"home",icon:"🏠",label:"الرئيسية"},
     {id:"request",icon:"✈️",label:"طلب رحلة"},
     {id:"offers",icon:"💬",label:"العروض"},
