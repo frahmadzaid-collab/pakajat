@@ -209,16 +209,25 @@ const Request = ({setPage})=>{
   };
 
   const handleAI=async()=>{
-    setAiState("loading"); setAiResult("");
-    const [,langEn]=detectLang(dest);
-    try{
-      await callClaude(
-        `You are a professional travel request translator. Translate the Arabic travel request to ${langEn} professionally for local tourism companies. Respond ONLY with the translation.`,
-        buildSummary(),(chunk)=>setAiResult(chunk)
-      );
-      setAiState("done"); setDone(true);
-    }catch{ setAiState("error"); }
-  };
+  setAiState("loading");
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('trip_requests').insert({
+      user_id: user.id,
+      destination: dest,
+      travelers: travelers,
+      services: svcs,
+      notes: notes,
+      ai_translation: null,
+      status: 'open'
+    })
+    setAiState("done");
+    setDone(true);
+  } catch(e) {
+    setAiState("error");
+  }
+};
+ 
 
   const Progress=()=>(
     <div style={{display:"flex",gap:6,padding:"14px 20px 0"}}>

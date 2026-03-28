@@ -8,7 +8,80 @@ const C = {
   muted: "#F3F4F6", border: "#E5E7EB",
   green: "#16A34A", greenBg: "#F0FDF4",
 }
+const OfferForm = ({ requestId }) => {
+  const [open, setOpen] = useState(false)
+  const [price, setPrice] = useState('')
+  const [description, setDescription] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)
 
+  const sendOffer = async () => {
+    if (!price) return
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    // جلب id الشركة
+    const { data: company } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('user_id', user.id)
+      .single()
+
+    await supabase.from('offers').insert({
+      request_id: requestId,
+      company_id: company?.id || null,
+      price: parseFloat(price),
+      description: description,
+      status: 'pending'
+    })
+    
+    setLoading(false)
+    setSent(true)
+    setOpen(false)
+  }
+
+  if (sent) return (
+    <div style={{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:10,padding:'10px 14px',textAlign:'center',fontSize:13,color:'#16A34A',fontWeight:700}}>
+      ✅ تم إرسال العرض بنجاح!
+    </div>
+  )
+
+  return (
+    <div>
+      {!open ? (
+        <button onClick={()=>setOpen(true)} style={{width:'100%',background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:10,padding:'11px',fontFamily:'inherit',fontWeight:700,fontSize:14,cursor:'pointer'}}>
+          إرسال عرض ←
+        </button>
+      ) : (
+        <div style={{background:'#FAFAFA',borderRadius:12,padding:14,border:`1px solid ${C.border}`}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.ink,marginBottom:10}}>📤 تفاصيل العرض</div>
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:12,color:C.gray,marginBottom:5}}>السعر الإجمالي (ريال)</div>
+            <input type="number" placeholder="مثال: 4200" value={price} onChange={e=>setPrice(e.target.value)}
+              style={{width:'100%',border:`1.5px solid ${C.border}`,borderRadius:10,padding:'10px 13px',fontFamily:'inherit',fontSize:14,outline:'none',boxSizing:'border-box',direction:'rtl'}}
+              onFocus={e=>e.target.style.borderColor=C.orange} onBlur={e=>e.target.style.borderColor=C.border}
+            />
+          </div>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:12,color:C.gray,marginBottom:5}}>تفاصيل العرض</div>
+            <textarea placeholder="مثال: يشمل الطيران + فندق 4 نجوم + جولات يومية..." value={description} onChange={e=>setDescription(e.target.value)} rows={3}
+              style={{width:'100%',border:`1.5px solid ${C.border}`,borderRadius:10,padding:'10px 13px',fontFamily:'inherit',fontSize:13,outline:'none',resize:'none',direction:'rtl',boxSizing:'border-box'}}
+              onFocus={e=>e.target.style.borderColor=C.orange} onBlur={e=>e.target.style.borderColor=C.border}
+            />
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            <button onClick={sendOffer} disabled={loading} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:10,padding:'11px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+              {loading?'جاري...':'🚀 إرسال'}
+            </button>
+            <button onClick={()=>setOpen(false)} style={{background:C.muted,color:C.gray,border:'none',borderRadius:10,padding:'11px',fontFamily:'inherit',fontSize:13,cursor:'pointer'}}>
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 export default function CompanyDashboard() {
   const [page, setPage] = useState('requests')
   const [requests, setRequests] = useState([])
@@ -93,9 +166,7 @@ export default function CompanyDashboard() {
                         {r.ai_translation}
                       </div>
                     )}
-                    <button style={{width:'100%',background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:10,padding:'11px',fontFamily:'inherit',fontWeight:700,fontSize:14,cursor:'pointer'}}>
-                      إرسال عرض ←
-                    </button>
+                   <OfferForm requestId={r.id} />
                   </div>
                 ))}
               </div>
