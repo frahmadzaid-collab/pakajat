@@ -207,7 +207,20 @@ const Request = ({setPage})=>{
     if(notes) p.push(`ملاحظات: ${notes}`);
     return p.join("\n");
   };
-
+const sendEmailNotification = async (to, subject, body) => {
+  try {
+    await fetch('https://uwmxximdupgfhfypdzll.supabase.co/functions/v1/quick-action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ to, subject, body }),
+    })
+  } catch(e) {
+    console.log('Email error:', e)
+  }
+}
   const handleAI=async()=>{
   setAiState("loading");
   try {
@@ -222,6 +235,12 @@ const Request = ({setPage})=>{
       status: 'open'
     })
     setAiState("done");
+    // إرسال إيميل للشركات
+await sendEmailNotification(
+  'fr.ahmad.zaid@gmail.com',
+  '🌍 طلب رحلة جديد على بكجات!',
+  `وصل طلب رحلة جديد إلى <strong>${dest}</strong> لـ ${travelers} مسافرين. سارع بإرسال عرضك!`
+)
     setDone(true);
   } catch(e) {
     setAiState("error");
