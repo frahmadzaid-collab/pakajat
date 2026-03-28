@@ -497,7 +497,11 @@ const Trips = ()=>{
 };
 
 // ── PROFILE ───────────────────────────────────────────────────────
-const Profile = ()=>(
+  const Profile = ()=>{
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+  }
+  return(
   <div style={{padding:"16px 20px 24px"}}>
     <div style={{textAlign:"center",padding:"20px 0 24px"}}>
       <div style={{width:80,height:80,borderRadius:"50%",background:`linear-gradient(135deg,${C.orange},${C.dark})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",fontSize:32,color:C.white,fontWeight:800}}>م</div>
@@ -515,9 +519,16 @@ const Profile = ()=>(
           <span style={{color:C.gray,fontSize:16}}>‹</span>
         </div>
       ))}
+   </div>
+    <div onClick={handleLogout} style={{display:"flex",alignItems:"center",gap:13,background:"#FEF2F2",borderRadius:13,padding:"14px 16px",border:"1px solid #FECACA",cursor:"pointer",marginTop:8}}>
+      <span style={{fontSize:20}}>🚪</span>
+      <div style={{flex:1}}>
+        <div style={{fontSize:14,fontWeight:600,color:"#DC2626"}}>تسجيل الخروج</div>
+      </div>
     </div>
   </div>
-);
+)
+}
 
 // ── APP ROOT ──────────────────────────────────────────────────────
 export default function App() {
