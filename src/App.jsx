@@ -458,50 +458,62 @@ await sendEmailNotification(
 const Offers = ()=>{
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
 
-  useEffect(()=>{
-    fetchOffers();
-  },[]);
+  useEffect(()=>{ fetchOffers(); },[]);
 
   const fetchOffers = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    
-    // جلب طلبات المسافر
     const { data: requests } = await supabase
-      .from('trip_requests')
-      .select('id')
-      .eq('user_id', user.id)
-    
-    if (!requests || requests.length === 0) {
-      setLoading(false);
-      return;
-    }
-
+      .from('trip_requests').select('id').eq('user_id', user.id)
+    if (!requests || requests.length === 0) { setLoading(false); return; }
     const requestIds = requests.map(r => r.id)
-
-    // جلب العروض على طلباته
     const { data } = await supabase
       .from('offers')
       .select('*, trip_requests(destination, travelers)')
       .in('request_id', requestIds)
       .order('created_at', { ascending: false })
-
     setOffers(data || []);
     setLoading(false);
   }
 
   const acceptOffer = async (offerId) => {
-    await supabase
-      .from('offers')
-      .update({ status: 'accepted' })
-      .eq('id', offerId)
+    await supabase.from('offers').update({ status: 'accepted' }).eq('id', offerId)
     fetchOffers();
   }
+
+  const rejectOffer = async (offerId) => {
+    await supabase.from('offers').update({ status: 'rejected' }).eq('id', offerId)
+    fetchOffers();
+  }
+
+  const filtered = offers.filter(o => {
+    if (filter === 'all') return true
+    if (filter === 'pending') return o.status === 'pending'
+    if (filter === 'accepted') return o.status === 'accepted'
+    if (filter === 'rejected') return o.status === 'rejected'
+    return true
+  })
+
+  const lowestPrice = offers.length > 0 ? Math.min(...offers.map(o => o.price)) : null
 
   return(
     <div style={{padding:"16px 20px 24px"}}>
       <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>العروض الواردة 💬</div>
       <div style={{fontSize:13,color:C.gray,marginBottom:14}}>{offers.length} عروض على طلباتك</div>
+
+      {/* فلتر */}
+      <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:8,marginBottom:14}}>
+        {[['all','الكل'],['pending','معلقة'],['accepted','مقبولة'],['rejected','مرفوضة']].map(([val,label])=>(
+          <button key={val} onClick={()=>setFilter(val)} style={{
+            border:`1.5px solid ${filter===val?C.orange:C.border}`,
+            background:filter===val?C.light:C.white,
+            color:filter===val?C.orange:C.gray,
+            borderRadius:20,padding:'5px 14px',fontSize:13,fontWeight:filter===val?700:500,
+            fontFamily:'inherit',cursor:'pointer',whiteSpace:'nowrap'
+          }}>{label}</button>
+        ))}
+      </div>
 
       {loading && <div style={{textAlign:"center",padding:40,color:C.gray}}>جاري التحميل...</div>}
 
@@ -514,15 +526,23 @@ const Offers = ()=>{
       )}
 
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {offers.map((o,i)=>(
-          <div key={o.id} style={{background:C.white,borderRadius:16,padding:"16px",border:`1.5px solid ${o.status==='accepted'?C.green:i===0?C.orange:C.border}`,boxShadow:i===0?`0 0 0 3px ${C.orange}12`:"none"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+        {filtered.map((o)=>(
+          <div key={o.id} style={{
+            background:C.white,borderRadius:16,padding:"16px",
+            border:`1.5px solid ${o.status==='accepted'?C.green:o.status==='rejected'?'#FECACA':o.price===lowestPrice?C.orange:C.border}`,
+            boxShadow:o.price===lowestPrice&&o.status==='pending'?`0 0 0 3px ${C.orange}12`:"none",
+            opacity:o.status==='rejected'?0.6:1,
+          }}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
               <div>
-                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
-                  <span style={{fontSize:16,fontWeight:700,color:C.ink}}>🏢 شركة سياحية</span>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4,flexWrap:'wrap'}}>
+                  <span style={{fontSize:15,fontWeight:700,color:C.ink}}>🏢 شركة سياحية</span>
                   {o.status==='accepted' && <span style={{background:C.greenBg,color:C.green,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>مقبول ✓</span>}
+                  {o.status==='rejected' && <span style={{background:'#FEF2F2',color:'#DC2626',borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>مرفوض</span>}
+                  {o.price===lowestPrice&&o.status==='pending' && <span style={{background:C.light,color:C.orange,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>الأفضل سعراً 🏆</span>}
                 </div>
                 <div style={{fontSize:13,color:C.gray}}>🌍 {o.trip_requests?.destination}</div>
+                <div style={{fontSize:12,color:C.gray}}>👥 {o.trip_requests?.travelers} مسافرين</div>
                 <div style={{fontSize:11,color:C.gray,marginTop:2}}>{new Date(o.created_at).toLocaleDateString('ar-SA')}</div>
               </div>
               <div style={{textAlign:"left"}}>
@@ -530,13 +550,15 @@ const Offers = ()=>{
                 <div style={{fontSize:11,color:C.gray}}>ريال</div>
               </div>
             </div>
+
             {o.description && (
-              <div style={{fontSize:13,color:C.ink,background:C.muted,borderRadius:8,padding:"8px 12px",marginBottom:12}}>{o.description}</div>
+              <div style={{fontSize:13,color:C.ink,background:C.muted,borderRadius:8,padding:"8px 12px",marginBottom:10,lineHeight:1.6}}>{o.description}</div>
             )}
-            {o.status !== 'accepted' && (
+
+            {o.status === 'pending' && (
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
                 <button onClick={()=>acceptOffer(o.id)} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"11px",fontFamily:"inherit",fontWeight:700,fontSize:14,cursor:"pointer"}}>✓ قبول العرض</button>
-                <button style={{background:C.muted,color:C.gray,border:"none",borderRadius:10,padding:"11px",fontFamily:"inherit",fontSize:13,cursor:"pointer"}}>التفاصيل</button>
+                <button onClick={()=>rejectOffer(o.id)} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:10,padding:"11px",fontFamily:"inherit",fontSize:13,cursor:"pointer",fontWeight:600}}>رفض</button>
               </div>
             )}
           </div>
@@ -545,6 +567,7 @@ const Offers = ()=>{
     </div>
   );
 };
+
 // ── TRIPS ─────────────────────────────────────────────────────────
 const Trips = ()=>{
   const [trips, setTrips] = useState([])
