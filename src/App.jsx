@@ -115,48 +115,16 @@ const SvcCard = ({icon,title,sub,active,onToggle,color=C.orange,bg=C.light,child
 
 // ── HOME ──────────────────────────────────────────────────────────
 const Home = ({setPage})=>{
-  const [user, setUser] = useState(null)
-  const [offers, setOffers] = useState([])
-  const [stats, setStats] = useState({ requests: 0, offers: 0, accepted: 0 })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(()=>{ fetchData() },[])
-
-  const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    setUser(user)
-
-    // جلب طلبات المسافر
-    const { data: requests } = await supabase
-      .from('trip_requests').select('id').eq('user_id', user.id)
-
-    if (requests && requests.length > 0) {
-      const requestIds = requests.map(r => r.id)
-      const { data: offs } = await supabase
-        .from('offers')
-        .select('*, trip_requests(destination, travelers)')
-        .in('request_id', requestIds)
-        .order('created_at', { ascending: false })
-        .limit(3)
-      setOffers(offs || [])
-      setStats({
-        requests: requests.length,
-        offers: offs?.length || 0,
-        accepted: offs?.filter(o => o.status === 'accepted').length || 0,
-      })
-    }
-    setLoading(false)
-  }
-
-  const name = user?.user_metadata?.full_name || 'بك'
-
+  const offers=[
+    {co:"رحلات النخيل",dest:"إسطنبول ٧ أيام",price:"٤,٢٠٠",rating:"4.9",badge:"الأفضل سعراً",hot:true},
+    {co:"السفر الذهبي",dest:"ماليزيا ١٠ أيام",price:"٣,٨٠٠",rating:"4.7",badge:"موصى به",hot:false},
+  ];
   return(
     <div>
-      {/* Hero */}
       <div style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,padding:"28px 20px 32px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-40,left:-40,width:160,height:160,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/>
         <div style={{position:"relative"}}>
-          <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:4}}>مرحباً {name} 👋</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:4}}>مرحباً بك في بكجات 👋</div>
           <div style={{fontSize:26,fontWeight:900,color:C.white,lineHeight:1.2,marginBottom:8}}>احصل على أفضل<br/>عرض لرحلتك</div>
           <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:20}}>اختر خدماتك والشركات تتنافس عليك</div>
           <button onClick={()=>setPage("request")} style={{background:C.white,color:C.orange,borderRadius:14,padding:"13px 28px",fontFamily:"inherit",fontWeight:800,fontSize:15,border:"none",cursor:"pointer"}}>
@@ -164,15 +132,9 @@ const Home = ({setPage})=>{
           </button>
         </div>
       </div>
-
       <div style={{padding:"0 16px"}}>
-        {/* Stats */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,margin:"16px 0"}}>
-          {[
-            ["✈️", loading ? "..." : stats.requests, "طلباتي"],
-            ["💬", loading ? "..." : stats.offers, "عروض واردة"],
-            ["✅", loading ? "..." : stats.accepted, "مقبولة"],
-          ].map(([i,v,l])=>(
+          {[["✈️","١٢","رحلة"],["💬","٤","عروض"],["⭐","١٨٪","توفير"]].map(([i,v,l])=>(
             <div key={l} style={{background:C.white,borderRadius:14,padding:"12px 10px",textAlign:"center",border:`1px solid ${C.border}`}}>
               <div style={{fontSize:20}}>{i}</div>
               <div style={{fontSize:20,fontWeight:800,color:C.ink}}>{v}</div>
@@ -180,59 +142,28 @@ const Home = ({setPage})=>{
             </div>
           ))}
         </div>
-
-        {/* CTA Banner */}
-        <div onClick={()=>setPage("request")} style={{background:`linear-gradient(135deg,#FFF4EE,#FFE8D6)`,border:`1.5px solid ${C.orange}33`,borderRadius:16,padding:"16px",marginBottom:20,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontSize:15,fontWeight:800,color:C.ink,marginBottom:4}}>طلب رحلة جديدة</div>
-            <div style={{fontSize:12,color:C.gray}}>اختر خدماتك • شركات تتنافس</div>
-          </div>
-          <div style={{width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.orange},${C.dark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>✈️</div>
-        </div>
-
-        {/* Offers */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontSize:16,fontWeight:800,color:C.ink}}>آخر العروض الواردة</div>
-          <button onClick={()=>setPage("offers")} style={{background:"none",border:"none",color:C.orange,fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>عرض الكل</button>
-        </div>
-
-        {loading && <div style={{textAlign:"center",padding:20,color:C.gray}}>جاري التحميل...</div>}
-
-        {!loading && offers.length === 0 && (
-          <div style={{textAlign:"center",padding:30,background:C.white,borderRadius:16,border:`1px solid ${C.border}`,marginBottom:20}}>
-            <div style={{fontSize:28,marginBottom:8}}>📭</div>
-            <div style={{fontSize:14,color:C.gray}}>لا توجد عروض بعد</div>
-            <div style={{fontSize:12,color:C.gray,marginTop:4}}>ابدأ بإرسال طلب رحلة!</div>
-            <button onClick={()=>setPage("request")} style={{marginTop:12,background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"10px 24px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-              ✈️ اطلب رحلة الآن
-            </button>
-          </div>
-        )}
-
+        <div style={{fontSize:16,fontWeight:800,color:C.ink,marginBottom:10}}>العروض الواردة 🔥</div>
         <div style={{display:"flex",flexDirection:"column",gap:12,paddingBottom:24}}>
           {offers.map((o,i)=>(
-            <div key={o.id} style={{background:C.white,borderRadius:16,padding:"15px 16px",border:`1.5px solid ${i===0?C.orange:C.border}`,boxShadow:i===0?`0 0 0 3px ${C.orange}12`:"none"}}>
+            <div key={i} style={{background:C.white,borderRadius:16,padding:"15px 16px",border:`1.5px solid ${o.hot?C.orange:C.border}`,boxShadow:o.hot?`0 0 0 3px ${C.orange}12`:"none"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
-                    <span style={{fontSize:15,fontWeight:700,color:C.ink}}>🏢 شركة سياحية</span>
-                    {o.status==='accepted' && <span style={{background:C.greenBg,color:C.green,borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:700}}>مقبول ✓</span>}
-                    {i===0 && o.status==='pending' && <span style={{background:C.light,color:C.orange,borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:700}}>جديد 🔥</span>}
+                    <span style={{fontSize:15,fontWeight:700,color:C.ink}}>{o.co}</span>
+                    <span style={{background:o.hot?C.orange:C.light,color:o.hot?C.white:C.orange,borderRadius:20,padding:"1px 9px",fontSize:10,fontWeight:700}}>{o.badge}</span>
                   </div>
-                  <div style={{fontSize:13,color:C.gray}}>🌍 {o.trip_requests?.destination}</div>
-                  <div style={{fontSize:11,color:C.gray}}>{new Date(o.created_at).toLocaleDateString('ar-SA')}</div>
+                  <div style={{fontSize:13,color:C.gray}}>{o.dest}</div>
+                  <div style={{fontSize:12,color:C.gray}}>⭐ {o.rating}</div>
                 </div>
                 <div style={{textAlign:"left"}}>
                   <div style={{fontSize:22,fontWeight:900,color:C.orange}}>{o.price}</div>
                   <div style={{fontSize:11,color:C.gray}}>ريال</div>
                 </div>
               </div>
-              {o.description && <div style={{fontSize:12,color:C.gray,background:C.muted,borderRadius:8,padding:"6px 10px",marginBottom:10}}>{o.description}</div>}
-              {o.status==='pending' && (
-                <button onClick={()=>setPage("offers")} style={{width:"100%",background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"10px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                  عرض التفاصيل والقبول ←
-                </button>
-              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <button style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"10px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>✓ قبول</button>
+                <button style={{background:C.muted,color:C.gray,border:"none",borderRadius:10,padding:"10px",fontFamily:"inherit",fontSize:13,cursor:"pointer"}}>التفاصيل</button>
+              </div>
             </div>
           ))}
         </div>
@@ -904,11 +835,11 @@ if (!session) return <Login />
 if (session?.user?.user_metadata?.role === 'company') return <CompanyDashboard />
 if (session?.user?.user_metadata?.role === 'admin') return <AdminDashboard />
 const tabs = [
-    {id:"home",icon:"🏠",label:"الرئيسية"},
-    {id:"request",icon:"✈️",label:"طلب رحلة"},
-    {id:"offers",icon:"💬",label:"العروض"},
-    {id:"trips",icon:"🗺️",label:"رحلاتي"},
-    {id:"profile",icon:"👤",label:"حسابي"},
+    {id:"home",label:"الرئيسية",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>},
+    {id:"request",label:"طلب رحلة",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.1 6.1l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/><path d="M14.05 2a9 9 0 0 1 8 7.94"/><path d="M14.05 6A5 5 0 0 1 18 10"/></svg>},
+    {id:"offers",label:"العروض",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>},
+    {id:"trips",label:"رحلاتي",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>},
+    {id:"profile",label:"حسابي",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>},
   ];
   return (
     <>
@@ -941,8 +872,7 @@ const tabs = [
                 {t.id==="request"?(
                   <div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${C.orange},${C.dark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,marginTop:-20,boxShadow:"0 4px 14px rgba(242,101,34,0.4)"}}>✈️</div>
                 ):(
-                  <div style={{fontSize:22,opacity:page===t.id?1:0.5}}>{t.icon}</div>
-                )}
+<div style={{opacity:page===t.id?1:0.45,color:page===t.id?C.orange:C.gray,transition:"all .2s"}}>{t.icon}</div>                )}
                 <span style={{fontSize:10,fontWeight:page===t.id?700:400,color:page===t.id?C.orange:C.gray}}>{t.label}</span>
                 {page===t.id&&t.id!=="request"&&<div style={{position:"absolute",top:0,width:24,height:3,borderRadius:"0 0 3px 3px",background:C.orange}}/>}
               </button>
