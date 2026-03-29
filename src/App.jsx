@@ -115,16 +115,37 @@ const SvcCard = ({icon,title,sub,active,onToggle,color=C.orange,bg=C.light,child
 
 // ── HOME ──────────────────────────────────────────────────────────
 const Home = ({setPage})=>{
-  const offers=[
-    {co:"رحلات النخيل",dest:"إسطنبول ٧ أيام",price:"٤,٢٠٠",rating:"4.9",badge:"الأفضل سعراً",hot:true},
-    {co:"السفر الذهبي",dest:"ماليزيا ١٠ أيام",price:"٣,٨٠٠",rating:"4.7",badge:"موصى به",hot:false},
-  ];
+  const [user, setUser] = useState(null)
+  const [offers, setOffers] = useState([])
+  const [trips, setTrips] = useState([])
+  const [stats, setStats] = useState({ requests:0, offers:0, accepted:0 })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(()=>{ fetchData() },[])
+
+  const fetchData = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setUser(user)
+    const { data: requests } = await supabase.from('trip_requests').select('id').eq('user_id', user.id)
+    if (requests && requests.length > 0) {
+      const requestIds = requests.map(r => r.id)
+      const { data: offs } = await supabase.from('offers').select('*, trip_requests(destination, travelers)').in('request_id', requestIds).order('created_at', { ascending: false }).limit(3)
+      setOffers(offs || [])
+      setStats({ requests: requests.length, offers: offs?.length || 0, accepted: offs?.filter(o=>o.status==='accepted').length || 0 })
+    }
+    const { data: tripsData } = await supabase.from('trip_requests').select('*, offers(count)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(3)
+    setTrips(tripsData || [])
+    setLoading(false)
+  }
+
+  const name = user?.user_metadata?.full_name || 'بك'
+
   return(
     <div>
       <div style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,padding:"28px 20px 32px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-40,left:-40,width:160,height:160,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/>
         <div style={{position:"relative"}}>
-          <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:4}}>مرحباً بك في بكجات 👋</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:4}}>مرحباً {name} 👋</div>
           <div style={{fontSize:26,fontWeight:900,color:C.white,lineHeight:1.2,marginBottom:8}}>احصل على أفضل<br/>عرض لرحلتك</div>
           <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:20}}>اختر خدماتك والشركات تتنافس عليك</div>
           <button onClick={()=>setPage("request")} style={{background:C.white,color:C.orange,borderRadius:14,padding:"13px 28px",fontFamily:"inherit",fontWeight:800,fontSize:15,border:"none",cursor:"pointer"}}>
@@ -132,9 +153,10 @@ const Home = ({setPage})=>{
           </button>
         </div>
       </div>
+
       <div style={{padding:"0 16px"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,margin:"16px 0"}}>
-          {[["✈️","١٢","رحلة"],["💬","٤","عروض"],["⭐","١٨٪","توفير"]].map(([i,v,l])=>(
+          {[["✈️", loading?"...":stats.requests,"طلباتي"],["💬", loading?"...":stats.offers,"عروض"],["✅", loading?"...":stats.accepted,"مقبولة"]].map(([i,v,l])=>(
             <div key={l} style={{background:C.white,borderRadius:14,padding:"12px 10px",textAlign:"center",border:`1px solid ${C.border}`}}>
               <div style={{fontSize:20}}>{i}</div>
               <div style={{fontSize:20,fontWeight:800,color:C.ink}}>{v}</div>
@@ -142,28 +164,77 @@ const Home = ({setPage})=>{
             </div>
           ))}
         </div>
-        <div style={{fontSize:16,fontWeight:800,color:C.ink,marginBottom:10}}>العروض الواردة 🔥</div>
+
+        {/* طلباتي الأخيرة */}
+        {trips.length > 0 && (
+          <div style={{marginBottom:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontSize:16,fontWeight:800,color:C.ink}}>طلباتي الأخيرة 📋</div>
+              <button onClick={()=>setPage("trips")} style={{background:"none",border:"none",color:C.orange,fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>عرض الكل</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {trips.map((t)=>(
+                <div key={t.id} onClick={()=>setPage("trips")} style={{background:C.white,borderRadius:14,padding:"13px 16px",border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:C.ink}}>🌍 {t.destination}</div>
+                    <div style={{fontSize:11,color:C.gray,marginTop:2}}>👥 {t.travelers} مسافرين · {new Date(t.created_at).toLocaleDateString('ar-SA')}</div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                    <span style={{background:t.status==='open'?C.greenBg:C.muted,color:t.status==='open'?C.green:C.gray,borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700}}>
+                      {t.status==='open'?'مفتوح':'مغلق'}
+                    </span>
+                    <span style={{background:C.blueBg,color:C.blue,borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700}}>
+                      💬 {t.offers?.[0]?.count||0} عروض
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* العروض الواردة */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:16,fontWeight:800,color:C.ink}}>العروض الواردة 🔥</div>
+          <button onClick={()=>setPage("offers")} style={{background:"none",border:"none",color:C.orange,fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>عرض الكل</button>
+        </div>
+
+        {loading && <div style={{textAlign:"center",padding:20,color:C.gray}}>جاري التحميل...</div>}
+
+        {!loading && offers.length === 0 && (
+          <div style={{textAlign:"center",padding:30,background:C.white,borderRadius:16,border:`1px solid ${C.border}`,marginBottom:20}}>
+            <div style={{fontSize:28,marginBottom:8}}>📭</div>
+            <div style={{fontSize:14,color:C.gray}}>لا توجد عروض بعد</div>
+            <button onClick={()=>setPage("request")} style={{marginTop:12,background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"10px 24px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+              ✈️ اطلب رحلة الآن
+            </button>
+          </div>
+        )}
+
         <div style={{display:"flex",flexDirection:"column",gap:12,paddingBottom:24}}>
           {offers.map((o,i)=>(
-            <div key={i} style={{background:C.white,borderRadius:16,padding:"15px 16px",border:`1.5px solid ${o.hot?C.orange:C.border}`,boxShadow:o.hot?`0 0 0 3px ${C.orange}12`:"none"}}>
+            <div key={o.id} style={{background:C.white,borderRadius:16,padding:"15px 16px",border:`1.5px solid ${i===0?C.orange:C.border}`,boxShadow:i===0?`0 0 0 3px ${C.orange}12`:"none"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
-                    <span style={{fontSize:15,fontWeight:700,color:C.ink}}>{o.co}</span>
-                    <span style={{background:o.hot?C.orange:C.light,color:o.hot?C.white:C.orange,borderRadius:20,padding:"1px 9px",fontSize:10,fontWeight:700}}>{o.badge}</span>
+                    <span style={{fontSize:15,fontWeight:700,color:C.ink}}>🏢 شركة سياحية</span>
+                    {o.status==='accepted'&&<span style={{background:C.greenBg,color:C.green,borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:700}}>مقبول ✓</span>}
+                    {i===0&&o.status==='pending'&&<span style={{background:C.light,color:C.orange,borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:700}}>جديد 🔥</span>}
                   </div>
-                  <div style={{fontSize:13,color:C.gray}}>{o.dest}</div>
-                  <div style={{fontSize:12,color:C.gray}}>⭐ {o.rating}</div>
+                  <div style={{fontSize:13,color:C.gray}}>🌍 {o.trip_requests?.destination}</div>
+                  <div style={{fontSize:11,color:C.gray}}>{new Date(o.created_at).toLocaleDateString('ar-SA')}</div>
                 </div>
                 <div style={{textAlign:"left"}}>
                   <div style={{fontSize:22,fontWeight:900,color:C.orange}}>{o.price}</div>
                   <div style={{fontSize:11,color:C.gray}}>ريال</div>
                 </div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <button style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"10px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>✓ قبول</button>
-                <button style={{background:C.muted,color:C.gray,border:"none",borderRadius:10,padding:"10px",fontFamily:"inherit",fontSize:13,cursor:"pointer"}}>التفاصيل</button>
-              </div>
+              {o.description&&<div style={{fontSize:12,color:C.gray,background:C.muted,borderRadius:8,padding:"6px 10px",marginBottom:10}}>{o.description}</div>}
+              {o.status==='pending'&&(
+                <button onClick={()=>setPage("offers")} style={{width:"100%",background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"10px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                  عرض التفاصيل والقبول ←
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -171,7 +242,6 @@ const Home = ({setPage})=>{
     </div>
   );
 };
-
 // ── REQUEST ───────────────────────────────────────────────────────
 const Request = ({setPage})=>{
   const [step,setStep]=useState(1);
@@ -457,6 +527,7 @@ await sendEmailNotification(
 // ── OFFERS ────────────────────────────────────────────────────────
 const Offers = ()=>{
   const [offers, setOffers] = useState([]);
+  const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
