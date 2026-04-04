@@ -936,10 +936,11 @@ const Bookings = ()=>{
 const Trips = ()=>{
   const [trips, setTrips] = useState([])
   const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState(null)
+  const [tripOffers, setTripOffers] = useState({})
+  const [filter, setFilter] = useState('all')
 
-  useEffect(()=>{
-    fetchTrips()
-  },[])
+  useEffect(()=>{ fetchTrips() },[])
 
   const fetchTrips = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -952,60 +953,144 @@ const Trips = ()=>{
     setLoading(false)
   }
 
+  const fetchTripOffers = async (tripId) => {
+    if (tripOffers[tripId]) {
+      setExpandedId(expandedId === tripId ? null : tripId)
+      return
+    }
+    const { data } = await supabase
+      .from('offers')
+      .select('*')
+      .eq('request_id', tripId)
+      .order('created_at', { ascending: false })
+    setTripOffers(p => ({ ...p, [tripId]: data || [] }))
+    setExpandedId(tripId)
+  }
+
+  const acceptOffer = async (offerId, tripId) => {
+    await supabase.from('offers').update({ status: 'accepted' }).eq('id', offerId)
+    await supabase.from('trip_requests').update({ status: 'closed' }).eq('id', tripId)
+    fetchTrips()
+    const { data } = await supabase.from('offers').select('*').eq('request_id', tripId)
+    setTripOffers(p => ({ ...p, [tripId]: data || [] }))
+  }
+
+  const rejectOffer = async (offerId, tripId) => {
+    await supabase.from('offers').update({ status: 'rejected' }).eq('id', offerId)
+    const { data } = await supabase.from('offers').select('*').eq('request_id', tripId)
+    setTripOffers(p => ({ ...p, [tripId]: data || [] }))
+  }
+
   const deleteTrip = async (id) => {
     await supabase.from('trip_requests').delete().eq('id', id)
     fetchTrips()
   }
 
+  const filtered = trips.filter(t => {
+    if (filter === 'all') return true
+    return t.status === filter
+  })
+
   if (loading) return <div style={{textAlign:'center',padding:40,color:C.gray}}>جاري التحميل...</div>
 
   return(
     <div style={{padding:"16px 20px 24px"}}>
-      <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>رحلاتي 🗺️</div>
-      <div style={{fontSize:13,color:C.gray,marginBottom:16}}>{trips.length} طلبات رحلة</div>
+      <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>طلباتي 📋</div>
+      <div style={{fontSize:13,color:C.gray,marginBottom:12}}>{trips.length} طلبات رحلة</div>
 
-      {trips.length === 0 && (
+      {/* فلتر */}
+      <div style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto',paddingBottom:4}}>
+        {[['all','الكل'],['open','مفتوحة'],['closed','مغلقة']].map(([val,label])=>(
+          <button key={val} onClick={()=>setFilter(val)} style={{border:`1.5px solid ${filter===val?C.orange:C.border}`,background:filter===val?C.light:C.white,color:filter===val?C.orange:C.gray,borderRadius:20,padding:'5px 14px',fontSize:13,fontWeight:filter===val?700:500,fontFamily:'inherit',cursor:'pointer',whiteSpace:'nowrap'}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
         <div style={{textAlign:'center',padding:40,background:C.white,borderRadius:16,border:`1px solid ${C.border}`}}>
-          <div style={{fontSize:32,marginBottom:8}}>✈️</div>
-          <div style={{fontSize:15,color:C.gray}}>لا توجد رحلات بعد</div>
+          <div style={{fontSize:32,marginBottom:8}}>📋</div>
+          <div style={{fontSize:15,color:C.gray}}>لا توجد طلبات</div>
           <div style={{fontSize:13,color:C.gray,marginTop:4}}>ابدأ بطلب رحلتك الأولى!</div>
         </div>
       )}
 
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {trips.map((t)=>(
-          <div key={t.id} style={{background:C.white,borderRadius:16,padding:"15px 16px",border:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-              <div>
-                <div style={{fontSize:16,fontWeight:700,color:C.ink,marginBottom:3}}>🌍 {t.destination}</div>
-                <div style={{fontSize:12,color:C.gray}}>👥 {t.travelers} مسافرين</div>
-                <div style={{fontSize:11,color:C.gray,marginTop:2}}>📅 {new Date(t.created_at).toLocaleDateString('ar-SA')}</div>
-                {t.notes && <div style={{fontSize:12,color:C.gray,marginTop:4,background:C.muted,borderRadius:6,padding:'4px 8px'}}>{t.notes}</div>}
+        {filtered.map((t)=>(
+          <div key={t.id} style={{background:C.white,borderRadius:16,border:`1.5px solid ${t.status==='closed'?C.green:C.border}`,overflow:'hidden'}}>
+            <div style={{padding:"15px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div>
+                  <div style={{fontSize:16,fontWeight:700,color:C.ink,marginBottom:3}}>🌍 {t.destination}</div>
+                  <div style={{fontSize:12,color:C.gray}}>👥 {t.travelers} مسافرين</div>
+                  <div style={{fontSize:11,color:C.gray,marginTop:2}}>📅 {new Date(t.created_at).toLocaleDateString('ar-SA')}</div>
+                  {t.notes && <div style={{fontSize:12,color:C.gray,marginTop:4,background:C.muted,borderRadius:6,padding:'4px 8px'}}>{t.notes}</div>}
+                </div>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
+                  <span style={{background:t.status==='open'?C.greenBg:C.muted,color:t.status==='open'?C.green:C.gray,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+                    {t.status==='open'?'مفتوح':'مغلق'}
+                  </span>
+                  <span style={{background:C.blueBg,color:C.blue,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+                    💬 {t.offers?.[0]?.count || 0} عروض
+                  </span>
+                </div>
               </div>
-              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
-                <span style={{background:t.status==='open'?C.greenBg:C.muted,color:t.status==='open'?C.green:C.gray,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
-                  {t.status==='open'?'مفتوح':'مغلق'}
-                </span>
-                <span style={{background:C.blueBg,color:C.blue,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
-                  💬 {t.offers?.[0]?.count || 0} عروض
-                </span>
+
+              <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginTop:10}}>
+                <button onClick={()=>fetchTripOffers(t.id)} style={{background:expandedId===t.id?C.muted:`linear-gradient(135deg,${C.orange},${C.dark})`,color:expandedId===t.id?C.gray:C.white,border:'none',borderRadius:10,padding:'10px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                  {expandedId===t.id?'إخفاء العروض ▲':'💬 عرض العروض ▼'}
+                </button>
+                <button onClick={()=>deleteTrip(t.id)} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:10,padding:'10px',fontFamily:'inherit',fontSize:13,cursor:'pointer',fontWeight:600}}>
+                  حذف
+                </button>
               </div>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginTop:10}}>
-              <button onClick={()=>alert('قريباً!')} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:10,padding:'10px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:'pointer'}}>
-                💬 عرض العروض
-              </button>
-              <button onClick={()=>deleteTrip(t.id)} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:10,padding:'10px',fontFamily:'inherit',fontSize:13,cursor:'pointer',fontWeight:600}}>
-                حذف
-              </button>
-            </div>
+
+            {/* العروض الخاصة بهذا الطلب */}
+            {expandedId===t.id && (
+              <div style={{borderTop:`1px solid ${C.border}`,padding:'14px 16px',background:'#FAFAFA'}}>
+                {!tripOffers[t.id] || tripOffers[t.id].length === 0 ? (
+                  <div style={{textAlign:'center',padding:'20px 0',color:C.gray,fontSize:13}}>
+                    📭 لا توجد عروض بعد — انتظر ردود الشركات
+                  </div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.ink,marginBottom:4}}>العروض الواردة:</div>
+                    {tripOffers[t.id].map((o,i)=>(
+                      <div key={o.id} style={{background:C.white,borderRadius:12,padding:'12px 14px',border:`1.5px solid ${o.status==='accepted'?C.green:o.status==='rejected'?'#FECACA':i===0?C.orange:C.border}`}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
+                          <div>
+                            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
+                              <span style={{fontSize:13,fontWeight:700,color:C.ink}}>🏢 شركة سياحية</span>
+                              {o.status==='accepted'&&<span style={{background:C.greenBg,color:C.green,borderRadius:20,padding:'1px 8px',fontSize:10,fontWeight:700}}>مقبول ✓</span>}
+                              {o.status==='rejected'&&<span style={{background:'#FEF2F2',color:'#DC2626',borderRadius:20,padding:'1px 8px',fontSize:10,fontWeight:700}}>مرفوض</span>}
+                              {i===0&&o.status==='pending'&&<span style={{background:C.light,color:C.orange,borderRadius:20,padding:'1px 8px',fontSize:10,fontWeight:700}}>🏆 الأفضل</span>}
+                            </div>
+                            {o.description&&<div style={{fontSize:12,color:C.gray,marginTop:2,lineHeight:1.5}}>{o.description}</div>}
+                          </div>
+                          <div style={{textAlign:'left',flexShrink:0}}>
+                            <div style={{fontSize:18,fontWeight:800,color:C.orange}}>{o.price}</div>
+                            <div style={{fontSize:10,color:C.gray}}>ريال</div>
+                          </div>
+                        </div>
+                        {o.status==='pending'&&(
+                          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8}}>
+                            <button onClick={()=>acceptOffer(o.id,t.id)} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:9,padding:'9px',fontFamily:'inherit',fontWeight:700,fontSize:12,cursor:'pointer'}}>✓ قبول العرض</button>
+                            <button onClick={()=>rejectOffer(o.id,t.id)} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:9,padding:'9px',fontFamily:'inherit',fontSize:12,cursor:'pointer',fontWeight:600}}>رفض</button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
     </div>
   )
 }
-
 // ── PROFILE ───────────────────────────────────────────────────────
 const Profile = ()=>{
   const [user, setUser] = useState(null)
