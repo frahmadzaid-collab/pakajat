@@ -243,287 +243,518 @@ const Home = ({setPage})=>{
   );
 };
 // ── REQUEST ───────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// REQUEST PAGE — نسخة محسّنة كاملة
+// ══════════════════════════════════════════════════════════════════
+
 const Request = ({setPage})=>{
-  const [step,setStep]=useState(1);
-  const [dest,setDest]=useState("");
-  const [travelers,setTravelers]=useState(2);
-  const [notes,setNotes]=useState("");
-  const [svcs,setSvcs]=useState({flight:false,visa:false,arrival:false,arrVip:false,departure:false,depVip:false,car:false,carPeriod:"يوم كامل",hotel:false,sim:false,simQty:2,tickets:false,program:false});
-  const [flt,setFlt]=useState({from:"",to:"",depart:"",ret:""});
-  const [hotels,setHotels]=useState([{stars:4,name:"",city:""}]);
-  const [attractions,setAttractions]=useState([]);
-  const [aiState,setAiState]=useState("idle");
-  const [aiResult,setAiResult]=useState("");
-  const [done,setDone]=useState(false);
+  const [step, setStep] = useState(1)
 
-  const s=(k,v)=>setSvcs(p=>({...p,[k]:v}));
-  const activeCnt=["flight","visa","arrival","departure","car","hotel","sim","tickets","program"].filter(k=>svcs[k]).length;
+  // الخطوة ١ — المسافرون والفترة
+  const [adults, setAdults] = useState(2)
+  const [children, setChildren] = useState(0)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
-  const attrMap={"إسطنبول":["آيا صوفيا","القصر العثماني","البازار الكبير","برج غلطة","البوسفور"],"باريس":["برج إيفل","متحف اللوفر","قوس النصر","قصر فيرساي"],"ماليزيا":["برجا بتروناس","جزيرة لنكاوي","كاميرون هايلاند"],"دبي":["برج خليفة","دبي مول","نخلة جميرا","صحراء دبي"]};
-  const destAttrs=attrMap[dest]||["حدد الوجهة أولاً"];
+  // الخطوة ٢ — مسار الرحلة
+  const [cities, setCities] = useState([{ city: '', from: '', to: '' }])
 
-  const buildSummary=()=>{
-    const p=[];
-    p.push(`الوجهة: ${dest}`);
-    p.push(`المسافرون: ${travelers}`);
-    if(svcs.flight) p.push(`طيران: ${flt.from} ← ${flt.to}، ذهاب ${flt.depart}، عودة ${flt.ret}`);
-    if(svcs.visa) p.push("تأشيرة سياحية");
-    if(svcs.arrival) p.push(`استقبال مطار${svcs.arrVip?" VIP":""}`);
-    if(svcs.departure) p.push(`توديع مطار${svcs.depVip?" VIP":""}`);
-    if(svcs.car) p.push(`سيارة بسائق (${svcs.carPeriod})`);
-    if(svcs.hotel) p.push(`فنادق: ${hotels.map(h=>`${h.city||dest} ${h.stars}★${h.name?` (${h.name})`:""}`).join(" | ")}`);
-    if(svcs.sim) p.push(`شرائح جوال: ${svcs.simQty}`);
-    if(svcs.tickets) p.push(`تذاكر: ${attractions.join("، ")||"حسب المدينة"}`);
-    if(svcs.program) p.push("تصميم برنامج سياحي يومي");
-    if(notes) p.push(`ملاحظات: ${notes}`);
-    return p.join("\n");
-  };
-const sendEmailNotification = async (to, subject, body) => {
-  try {
-    await fetch('https://uwmxximdupgfhfypdzll.supabase.co/functions/v1/quick-action', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ to, subject, body }),
-    })
-  } catch(e) {
-    console.log('Email error:', e)
+  // الخطوة ٣ — الخدمات
+  const [svcs, setSvcs] = useState({
+    flight: false, visa: false,
+    arrival: false, arrVip: false,
+    departure: false, depVip: false,
+    car: false, carDays: 'طوال الرحلة', carCustomDays: '',
+    hotel: false,
+    sim: false, simQty: 2,
+    tickets: false,
+    program: false,
+  })
+
+  // طيران
+  const [flights, setFlights] = useState([{ from: '', to: '', date: '' }])
+
+  // فنادق (تلقائي حسب المدن)
+  const [hotels, setHotels] = useState([])
+
+  // تذاكر
+  const [selectedAttractions, setSelectedAttractions] = useState([])
+
+  // الخطوة ٤ — ملاحظات + إرسال
+  const [notes, setNotes] = useState('')
+  const [aiState, setAiState] = useState('idle')
+  const [done, setDone] = useState(false)
+
+  const s = (k, v) => setSvcs(p => ({ ...p, [k]: v }))
+
+  const totalTravelers = adults + children
+  const activeCnt = ['flight','visa','arrival','departure','car','hotel','sim','tickets','program'].filter(k => svcs[k]).length
+
+  // أماكن سياحية حسب المدينة
+  const attrMap = {
+    'باريس': [{ name: 'برج إيفل', price: 28 }, { name: 'متحف اللوفر', price: 22 }, { name: 'قوس النصر', price: 0 }, { name: 'قصر فيرساي', price: 20 }],
+    'إسطنبول': [{ name: 'آيا صوفيا', price: 25 }, { name: 'القصر العثماني', price: 30 }, { name: 'البازار الكبير', price: 0 }, { name: 'برج غلطة', price: 12 }],
+    'ماليزيا': [{ name: 'برجا بتروناس', price: 80 }, { name: 'جزيرة لنكاوي', price: 50 }, { name: 'كاميرون هايلاند', price: 30 }],
+    'دبي': [{ name: 'برج خليفة', price: 149 }, { name: 'دبي مول', price: 0 }, { name: 'نخلة جميرا', price: 50 }, { name: 'صحراء دبي', price: 200 }],
+    'جنيف': [{ name: 'بحيرة جنيف', price: 0 }, { name: 'نافورة جنيف', price: 0 }, { name: 'متحف الصليب الأحمر', price: 15 }],
+    'لندن': [{ name: 'برج لندن', price: 34 }, { name: 'متحف بريطاني', price: 0 }, { name: 'قصر باكنهام', price: 30 }, { name: 'عين لندن', price: 32 }],
+    'روما': [{ name: 'الكولوسيوم', price: 16 }, { name: 'نافورة تريفي', price: 0 }, { name: 'الفاتيكان', price: 20 }],
   }
-}
-  const handleAI=async()=>{
-  setAiState("loading");
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('trip_requests').insert({
-      user_id: user.id,
-      destination: dest,
-      travelers: travelers,
-      services: svcs,
-      notes: notes,
-      ai_translation: null,
-      status: 'open'
-    })
-    setAiState("done");
-    // إرسال إيميل للشركات
-await sendEmailNotification(
-  'fr.ahmad.zaid@gmail.com',
-  '🌍 طلب رحلة جديد على بكجات!',
-  `وصل طلب رحلة جديد إلى <strong>${dest}</strong> لـ ${travelers} مسافرين. سارع بإرسال عرضك!`
-)
-    setDone(true);
-  } catch(e) {
-    setAiState("error");
-  }
-};
- 
 
-  const Progress=()=>(
-    <div style={{display:"flex",gap:6,padding:"14px 20px 0"}}>
-      {[1,2,3].map(n=>(
-        <div key={n} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
-          <div style={{width:"100%",height:5,borderRadius:3,background:step>=n?C.orange:C.border,transition:"background .3s"}}/>
-          <div style={{fontSize:10,color:step>=n?C.orange:C.gray,fontWeight:step===n?700:400}}>
-            {["الوجهة","الخدمات","الإرسال"][n-1]}
-          </div>
+  // أسعار الاستقبال/التوديع التقريبية حسب المدينة
+  const transferPrices = {
+    'باريس': { normal: 120, vip: 250 },
+    'إسطنبول': { normal: 80, vip: 180 },
+    'دبي': { normal: 150, vip: 350 },
+    'ماليزيا': { normal: 60, vip: 150 },
+    'لندن': { normal: 130, vip: 280 },
+    'جنيف': { normal: 140, vip: 300 },
+    'روما': { normal: 100, vip: 220 },
+  }
+
+  const firstCity = cities[0]?.city || ''
+  const transferPrice = transferPrices[firstCity] || { normal: 100, vip: 250 }
+
+  // عند تغيير المدن — تحديث الفنادق تلقائياً
+  const updateCities = (newCities) => {
+    setCities(newCities)
+    const newHotels = newCities.filter(c => c.city).map(c => ({
+      city: c.city, stars: 4, name: '', breakfast: false
+    }))
+    setHotels(newHotels)
+  }
+
+  const allCityAttractions = cities.filter(c => c.city && attrMap[c.city]).flatMap(c =>
+    (attrMap[c.city] || []).map(a => ({ ...a, city: c.city }))
+  )
+
+  const ticketTotal = selectedAttractions.reduce((sum, key) => {
+    const [city, name] = key.split('||')
+    const cityAttrs = attrMap[city] || []
+    const attr = cityAttrs.find(a => a.name === name)
+    return sum + (attr ? attr.price * adults + (attr.price * 0.5 * children) : 0)
+  }, 0)
+
+  const buildSummary = () => {
+    const p = []
+    p.push(`المسافرون: ${adults} بالغ${children > 0 ? ` + ${children} أطفال` : ''}`)
+    p.push(`فترة الرحلة: ${dateFrom} → ${dateTo}`)
+    if (cities.filter(c => c.city).length > 0) p.push(`مسار الرحلة: ${cities.filter(c => c.city).map(c => `${c.city} (${c.from}→${c.to})`).join(' ← ')}`)
+    if (svcs.flight) p.push(`طيران: ${flights.map(f => `${f.from}→${f.to} (${f.date})`).join(' | ')}`)
+    if (svcs.visa) p.push(`تأشيرة سياحية: ٨٥٠ ريال شاملة (حجز موعد + تأمين + ترجمة)`)
+    if (svcs.arrival) p.push(`استقبال مطار${svcs.arrVip ? ' VIP' : ''}: ~${svcs.arrVip ? '' : ''} ريال`)
+    if (svcs.departure) p.push(`توديع مطار${svcs.depVip ? ' VIP' : ''}: ~${svcs.depVip ? '' : ''} ريال`)
+    if (svcs.car) p.push(`سيارة بسائق: ${svcs.carDays === 'عدد أيام' ? `${svcs.carCustomDays} أيام` : svcs.carDays}`)
+    if (svcs.hotel) p.push(`فنادق: ${hotels.map(h => `${h.city} ${h.stars}★${h.name ? ` (${h.name})` : ''}${h.breakfast ? ' + إفطار' : ''}`).join(' | ')}`)
+    if (svcs.sim) p.push(`شرائح جوال: ${svcs.simQty} شرائح (20 قيقا)`)
+    if (svcs.tickets && selectedAttractions.length > 0) p.push(`تذاكر سياحية: ${selectedAttractions.map(k => k.split('||')[1]).join('، ')} (إجمالي تقريبي: ${ticketTotal.toFixed(0)} دولار)`)
+    if (svcs.program) p.push('تصميم برنامج سياحي يومي بالذكاء الاصطناعي')
+    if (notes) p.push(`ملاحظات: ${notes}`)
+    return p.join('\n')
+  }
+
+  const handleSend = async () => {
+    setAiState('loading')
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('trip_requests').insert({
+        user_id: user.id,
+        destination: cities.filter(c => c.city).map(c => c.city).join(' - ') || 'غير محدد',
+        travelers: totalTravelers,
+        services: { ...svcs, flights, hotels, selectedAttractions, adults, children, dateFrom, dateTo, cities },
+        notes: notes,
+        ai_translation: buildSummary(),
+        status: 'open'
+      })
+
+      // إرسال إيميل
+      await fetch('https://uwmxximdupgfhfypdzll.supabase.co/functions/v1/quick-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          to: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'fr.ahmad.zaid@gmail.com' : 'admin@pakajat.com',
+          subject: `🌍 طلب رحلة جديد — ${cities.filter(c=>c.city).map(c=>c.city).join(', ')}`,
+          body: `وصل طلب رحلة جديد!<br/><br/>${buildSummary().replace(/\n/g,'<br/>')}`
+        })
+      })
+
+      setAiState('done')
+      setDone(true)
+    } catch { setAiState('error') }
+  }
+
+  const Progress = () => (
+    <div style={{ display: 'flex', gap: 6, padding: '14px 20px 0' }}>
+      {['المسافرون','المسار','الخدمات','الإرسال'].map((label, i) => (
+        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: '100%', height: 5, borderRadius: 3, background: step > i ? C.orange : step === i+1 ? C.orange : C.border, transition: 'background .3s' }} />
+          <div style={{ fontSize: 9, color: step === i+1 ? C.orange : C.gray, fontWeight: step === i+1 ? 700 : 400 }}>{label}</div>
         </div>
       ))}
     </div>
-  );
+  )
 
-  return(
+  const inputStyle = { width: '100%', border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '10px 13px', fontFamily: 'inherit', fontSize: 13, outline: 'none', boxSizing: 'border-box', direction: 'rtl', background: C.white, transition: 'border .15s' }
+
+  // ── STEP 1: المسافرون والفترة ──
+  if (step === 1) return (
     <div>
-      <Progress/>
-      {step===1&&(
-        <div style={{padding:"16px 20px 24px"}}>
-          <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>وجهتك ✈️</div>
-          <div style={{fontSize:13,color:C.gray,marginBottom:20}}>حدد الوجهة وعدد المسافرين</div>
-          <Label>الوجهة السياحية</Label>
-          <Field placeholder="مثال: إسطنبول، باريس، ماليزيا..." value={dest} onChange={setDest} icon="🌍"/>
-          <div style={{height:16}}/>
-          <div style={{background:C.white,border:`1.5px solid ${C.border}`,borderRadius:14,padding:"16px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:700,color:C.ink}}>عدد المسافرين</div>
-                <div style={{fontSize:12,color:C.gray,marginTop:2}}>بالغون وأطفال</div>
-              </div>
-              <Stepper value={travelers} onChange={setTravelers}/>
+      <Progress />
+      <div style={{ padding: '16px 20px 24px' }}>
+        <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, marginBottom: 4 }}>المسافرون والفترة 🗓️</div>
+        <div style={{ fontSize: 13, color: C.gray, marginBottom: 20 }}>حدد عدد المسافرين وتاريخ الرحلة</div>
+
+        {/* البالغون */}
+        <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: '16px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>👨‍👩‍👧 البالغون</div>
+              <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>١٢ سنة فأكثر</div>
+            </div>
+            <Stepper value={adults} onChange={setAdults} min={1} max={30} />
+          </div>
+        </div>
+
+        {/* الأطفال */}
+        <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: '16px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>👶 الأطفال</div>
+              <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>أقل من ١٢ سنة</div>
+            </div>
+            <Stepper value={children} onChange={setChildren} min={0} max={20} />
+          </div>
+        </div>
+
+        {/* فترة الرحلة */}
+        <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: '16px', marginBottom: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.ink, marginBottom: 12 }}>📅 فترة الرحلة</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <Label>تاريخ المغادرة</Label>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={inputStyle} onFocus={e => e.target.style.borderColor = C.orange} onBlur={e => e.target.style.borderColor = C.border} />
+            </div>
+            <div>
+              <Label>تاريخ العودة</Label>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={inputStyle} onFocus={e => e.target.style.borderColor = C.orange} onBlur={e => e.target.style.borderColor = C.border} />
             </div>
           </div>
-          <div style={{height:24}}/>
-          <button onClick={()=>setStep(2)} disabled={!dest.trim()} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",fontFamily:"inherit",fontWeight:800,fontSize:16,cursor:dest.trim()?"pointer":"not-allowed",background:dest.trim()?`linear-gradient(135deg,${C.orange},${C.dark})`:C.border,color:dest.trim()?C.white:C.gray,boxShadow:dest.trim()?"0 6px 20px rgba(242,101,34,0.35)":"none"}}>
-            اختر الخدمات ←
-          </button>
+          {dateFrom && dateTo && (
+            <div style={{ marginTop: 10, background: C.light, borderRadius: 8, padding: '8px 12px', fontSize: 12, color: C.orange, fontWeight: 600 }}>
+              ⏱ مدة الرحلة: {Math.ceil((new Date(dateTo) - new Date(dateFrom)) / (1000*60*60*24))} يوم
+            </div>
+          )}
         </div>
-      )}
 
-      {step===2&&(
-        <div>
-          <button onClick={()=>setStep(1)} style={{background:"none",border:"none",color:C.orange,fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,padding:"16px 20px 8px"}}>← رجوع</button>
-          <div style={{padding:"0 20px 8px"}}>
-            <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:2}}>اختر الخدمات 🛎️</div>
-            <div style={{fontSize:13,color:C.gray}}>{dest} · {travelers} مسافر{activeCnt>0&&<span style={{color:C.orange,fontWeight:700}}> · {activeCnt} خدمات</span>}</div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:10,padding:"14px 20px 24px"}}>
-            <SvcCard icon="✈️" title="طيران دولي" sub="حجز تذاكر ذهاب وإياب" active={svcs.flight} onToggle={()=>s("flight",!svcs.flight)} color={C.blue} bg={C.blueBg}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                <div><Label>مدينة الإقلاع</Label><Field placeholder="الرياض" value={flt.from} onChange={v=>setFlt(f=>({...f,from:v}))} icon="🛫"/></div>
-                <div><Label>مدينة الوصول</Label><Field placeholder={dest} value={flt.to} onChange={v=>setFlt(f=>({...f,to:v}))} icon="🛬"/></div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div><Label>تاريخ الذهاب</Label><Field type="date" value={flt.depart} onChange={v=>setFlt(f=>({...f,depart:v}))}/></div>
-                <div><Label>تاريخ العودة</Label><Field type="date" value={flt.ret} onChange={v=>setFlt(f=>({...f,ret:v}))}/></div>
-              </div>
-            </SvcCard>
+        <button onClick={() => setStep(2)} disabled={!dateFrom || !dateTo} style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: 16, cursor: (dateFrom && dateTo) ? 'pointer' : 'not-allowed', background: (dateFrom && dateTo) ? `linear-gradient(135deg,${C.orange},${C.dark})` : C.border, color: (dateFrom && dateTo) ? C.white : C.gray, boxShadow: (dateFrom && dateTo) ? '0 6px 20px rgba(242,101,34,0.35)' : 'none' }}>
+          حدد مسار الرحلة ←
+        </button>
+      </div>
+    </div>
+  )
 
-            <SvcCard icon="📄" title="تأشيرة سياحية" sub="متطلبات ورسوم التأشيرة" active={svcs.visa} onToggle={()=>s("visa",!svcs.visa)} color={C.purple} bg={C.purpleBg}>
-              <div style={{background:C.purpleBg,borderRadius:12,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+  // ── STEP 2: مسار الرحلة ──
+  if (step === 2) return (
+    <div>
+      <Progress />
+      <div style={{ padding: '16px 20px 24px' }}>
+        <button onClick={() => setStep(1)} style={{ background: 'none', border: 'none', color: C.orange, fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>← رجوع</button>
+        <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, marginBottom: 4 }}>مسار الرحلة 🗺️</div>
+        <div style={{ fontSize: 13, color: C.gray, marginBottom: 20 }}>أضف المدن التي ستزورها وفترة الإقامة في كل مدينة</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          {cities.map((c, i) => (
+            <div key={i} style={{ background: C.white, borderRadius: 14, padding: '16px', border: `1.5px solid ${C.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>🏙️ المدينة {i + 1}</div>
+                {i > 0 && (
+                  <button onClick={() => { const n = cities.filter((_, j) => j !== i); updateCities(n) }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>✕ حذف</button>
+                )}
+              </div>
+              <Label>اسم المدينة</Label>
+              <input
+                placeholder="مثال: باريس، إسطنبول، دبي..."
+                value={c.city}
+                onChange={e => {
+                  const n = cities.map((x, j) => j === i ? { ...x, city: e.target.value } : x)
+                  updateCities(n)
+                }}
+                style={{ ...inputStyle, marginBottom: 10 }}
+                onFocus={e => e.target.style.borderColor = C.orange}
+                onBlur={e => e.target.style.borderColor = C.border}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div>
-                  <div style={{fontSize:13,fontWeight:700,color:C.purple}}>متطلبات تأشيرة {dest}</div>
-                  <div style={{fontSize:12,color:C.gray,marginTop:2}}>اطلع على الوثائق المطلوبة</div>
+                  <Label>تاريخ الوصول</Label>
+                  <input type="date" value={c.from} onChange={e => { const n = cities.map((x, j) => j === i ? { ...x, from: e.target.value } : x); setCities(n) }} style={inputStyle} onFocus={e => e.target.style.borderColor = C.orange} onBlur={e => e.target.style.borderColor = C.border} />
                 </div>
-                <a href="https://www.mofa.gov.sa" target="_blank" rel="noopener" style={{background:C.purple,color:C.white,borderRadius:9,padding:"7px 13px",fontSize:12,fontWeight:700,textDecoration:"none"}}>الرابط ↗</a>
+                <div>
+                  <Label>تاريخ المغادرة</Label>
+                  <input type="date" value={c.to} onChange={e => { const n = cities.map((x, j) => j === i ? { ...x, to: e.target.value } : x); setCities(n) }} style={inputStyle} onFocus={e => e.target.style.borderColor = C.orange} onBlur={e => e.target.style.borderColor = C.border} />
+                </div>
               </div>
-            </SvcCard>
+              {c.city && c.from && c.to && (
+                <div style={{ marginTop: 8, background: C.light, borderRadius: 8, padding: '6px 10px', fontSize: 11, color: C.orange, fontWeight: 600 }}>
+                  ⏱ {Math.ceil((new Date(c.to) - new Date(c.from)) / (1000*60*60*24))} ليلة في {c.city}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
 
-            <SvcCard icon="🚖" title="استقبال في المطار" sub="خدمة استقبال عند الوصول" active={svcs.arrival} onToggle={()=>s("arrival",!svcs.arrival)} color={C.red} bg={C.redBg}>
-              <div style={{background:svcs.arrVip?C.redBg:C.muted,border:`1.5px solid ${svcs.arrVip?C.red:C.border}`,borderRadius:12,padding:"12px 14px"}}>
-                <Toggle value={svcs.arrVip} onChange={v=>s("arrVip",v)} label="⭐ ترقية VIP" sub="لوحة استقبال · عربة كبار الشخصيات"/>
+        <button onClick={() => updateCities([...cities, { city: '', from: '', to: '' }])} style={{ width: '100%', border: `1.5px dashed ${C.orange}`, background: C.light, borderRadius: 12, padding: '11px', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: C.orange, cursor: 'pointer', marginBottom: 20 }}>
+          + إضافة مدينة أخرى
+        </button>
+
+        <button onClick={() => setStep(3)} disabled={!cities.some(c => c.city)} style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: 16, cursor: cities.some(c => c.city) ? 'pointer' : 'not-allowed', background: cities.some(c => c.city) ? `linear-gradient(135deg,${C.orange},${C.dark})` : C.border, color: cities.some(c => c.city) ? C.white : C.gray, boxShadow: cities.some(c => c.city) ? '0 6px 20px rgba(242,101,34,0.35)' : 'none' }}>
+          اختر الخدمات ←
+        </button>
+      </div>
+    </div>
+  )
+
+  // ── STEP 3: الخدمات ──
+  if (step === 3) return (
+    <div>
+      <Progress />
+      <div>
+        <button onClick={() => setStep(2)} style={{ background: 'none', border: 'none', color: C.orange, fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '16px 20px 8px', display: 'flex', alignItems: 'center', gap: 5 }}>← رجوع</button>
+        <div style={{ padding: '0 20px 8px' }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, marginBottom: 2 }}>الخدمات المطلوبة 🛎️</div>
+          <div style={{ fontSize: 13, color: C.gray }}>
+            {cities.filter(c=>c.city).map(c=>c.city).join(' ← ')} · {totalTravelers} مسافر
+            {activeCnt > 0 && <span style={{ color: C.orange, fontWeight: 700 }}> · {activeCnt} خدمات</span>}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 20px 24px' }}>
+
+          {/* ١ - طيران */}
+          <SvcCard icon="✈️" title="طيران دولي" sub="حجز تذاكر الرحلة" active={svcs.flight} onToggle={() => s('flight', !svcs.flight)} color={C.blue} bg={C.blueBg}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {flights.map((f, i) => (
+                <div key={i} style={{ background: '#FAFAFA', borderRadius: 10, padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>رحلة {i === 0 ? 'الذهاب' : i === flights.length - 1 ? 'العودة' : `${i + 1}`}</div>
+                    {i > 0 && <button onClick={() => setFlights(fs => fs.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>✕</button>}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div><Label>من</Label><input placeholder="الرياض" value={f.from} onChange={e => setFlights(fs => fs.map((x, j) => j === i ? { ...x, from: e.target.value } : x))} style={{ ...inputStyle, fontSize: 12 }} onFocus={e => e.target.style.borderColor = C.blue} onBlur={e => e.target.style.borderColor = C.border} /></div>
+                    <div><Label>إلى</Label><input placeholder="باريس" value={f.to} onChange={e => setFlights(fs => fs.map((x, j) => j === i ? { ...x, to: e.target.value } : x))} style={{ ...inputStyle, fontSize: 12 }} onFocus={e => e.target.style.borderColor = C.blue} onBlur={e => e.target.style.borderColor = C.border} /></div>
+                  </div>
+                  <Label>تاريخ الرحلة</Label>
+                  <input type="date" value={f.date} onChange={e => setFlights(fs => fs.map((x, j) => j === i ? { ...x, date: e.target.value } : x))} style={inputStyle} onFocus={e => e.target.style.borderColor = C.blue} onBlur={e => e.target.style.borderColor = C.border} />
+                </div>
+              ))}
+              <button onClick={() => setFlights(fs => [...fs, { from: '', to: '', date: '' }])} style={{ border: `1.5px dashed ${C.blue}`, background: C.blueBg, borderRadius: 10, padding: '9px', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, color: C.blue, cursor: 'pointer' }}>
+                + إضافة رحلة (وجهة إضافية أو توقف)
+              </button>
+            </div>
+          </SvcCard>
+
+          {/* ٢ - تأشيرة */}
+          <SvcCard icon="📄" title="تأشيرة سياحية" sub="متطلبات ووثائق التأشيرة" active={svcs.visa} onToggle={() => s('visa', !svcs.visa)} color={C.purple} bg={C.purpleBg}>
+            <div style={{ background: C.purpleBg, borderRadius: 10, padding: '12px', marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.purple, marginBottom: 4 }}></div>
+              <div style={{ fontSize: 12, color: C.gray }}>✓ حجز موعد القنصلية · ✓ تأمين سفر · ✓ ترجمة الوثائق</div>
+            </div>
+            <div style={{ background: C.white, borderRadius: 10, padding: '12px', border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>متطلبات التأشيرة</div>
+                <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>الوثائق المطلوبة للسفارة</div>
               </div>
-            </SvcCard>
+              <a href="https://www.mofa.gov.sa" target="_blank" rel="noopener" style={{ background: C.purple, color: C.white, borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>الرابط ↗</a>
+            </div>
+          </SvcCard>
 
-            <SvcCard icon="🛫" title="توديع إلى المطار" sub="خدمة توديع عند المغادرة" active={svcs.departure} onToggle={()=>s("departure",!svcs.departure)} color={C.red} bg={C.redBg}>
-              <div style={{background:svcs.depVip?C.redBg:C.muted,border:`1.5px solid ${svcs.depVip?C.red:C.border}`,borderRadius:12,padding:"12px 14px"}}>
-                <Toggle value={svcs.depVip} onChange={v=>s("depVip",v)} label="⭐ ترقية VIP" sub="مرافق شخصي · خدمة الأمتعة"/>
+          {/* ٣ - استقبال */}
+          <SvcCard icon="🚖" title="استقبال في المطار" sub="خدمة استقبال عند الوصول" active={svcs.arrival} onToggle={() => s('arrival', !svcs.arrival)} color={C.red} bg={C.redBg}>
+            <div style={{ background: svcs.arrVip ? C.redBg : C.muted, border: `1.5px solid ${svcs.arrVip ? C.red : C.border}`, borderRadius: 12, padding: '12px 14px' }}>
+              <Toggle value={svcs.arrVip} onChange={v => s('arrVip', v)} label="⭐ ترقية VIP" sub={`لوحة استقبال مخصصة · عربة كبار الشخصيات · VIP`} />
+            </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: C.gray }}>📍 الاستقبال في مدينة {firstCity || 'الوجهة'}</div>
+          </SvcCard>
+
+          {/* ٤ - توديع */}
+          <SvcCard icon="🛫" title="توديع إلى المطار" sub="خدمة توديع عند المغادرة" active={svcs.departure} onToggle={() => s('departure', !svcs.departure)} color={C.red} bg={C.redBg}>
+            <div style={{ background: svcs.depVip ? C.redBg : C.muted, border: `1.5px solid ${svcs.depVip ? C.red : C.border}`, borderRadius: 12, padding: '12px 14px' }}>
+              <Toggle value={svcs.depVip} onChange={v => s('depVip', v)} label="⭐ ترقية VIP" sub={`مرافق شخصي · خدمة الأمتعة · VIP`} />
+            </div>
+          </SvcCard>
+
+          {/* ٥ - سيارة */}
+          <SvcCard icon="🚗" title="سيارة بسائق" sub="نقل خاص داخل الوجهة" active={svcs.car} onToggle={() => s('car', !svcs.car)} color={C.green} bg={C.greenBg}>
+            <Label>الفترة المطلوبة</Label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: svcs.carDays === 'عدد أيام' ? 10 : 0 }}>
+              {['طوال الرحلة', 'يوم كامل', 'نصف يوم', 'عدد أيام'].map(p => (
+                <Chip key={p} label={p} active={svcs.carDays === p} onClick={() => s('carDays', p)} color={C.green} bg={C.greenBg} />
+              ))}
+            </div>
+            {svcs.carDays === 'عدد أيام' && (
+              <div style={{ marginTop: 8 }}>
+                <Label>عدد الأيام</Label>
+                <input type="number" placeholder="مثال: 3" value={svcs.carCustomDays} onChange={e => s('carCustomDays', e.target.value)} style={inputStyle} onFocus={e => e.target.style.borderColor = C.green} onBlur={e => e.target.style.borderColor = C.border} />
               </div>
-            </SvcCard>
+            )}
+          </SvcCard>
 
-            <SvcCard icon="🚗" title="سيارة بسائق" sub="نقل خاص داخل الوجهة" active={svcs.car} onToggle={()=>s("car",!svcs.car)} color={C.green} bg={C.greenBg}>
-              <Label>الفترة المطلوبة</Label>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {["نصف يوم","يوم كامل","٣ أيام","أسبوع","طوال الرحلة"].map(p=>(
-                  <Chip key={p} label={p} active={svcs.carPeriod===p} onClick={()=>s("carPeriod",p)} color={C.green} bg={C.greenBg}/>
-                ))}
+          {/* ٦ - فنادق */}
+          <SvcCard icon="🏨" title="فنادق" sub="فنادق تلقائية حسب مسار رحلتك" active={svcs.hotel} onToggle={() => s('hotel', !svcs.hotel)}>
+            {hotels.length === 0 ? (
+              <div style={{ fontSize: 13, color: C.gray, textAlign: 'center', padding: '10px 0' }}>
+                ⚠️ حدد مسار رحلتك أولاً لإضافة الفنادق تلقائياً
               </div>
-            </SvcCard>
-
-            <SvcCard icon="🏨" title="فنادق" sub="اختر التصنيف وأضف أكثر من فندق" active={svcs.hotel} onToggle={()=>s("hotel",!svcs.hotel)}>
-              <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                {hotels.map((h,i)=>(
-                  <div key={i} style={{background:"#FAFAFA",borderRadius:12,padding:"13px"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div style={{fontSize:13,fontWeight:700,color:C.ink}}>فندق {i+1}</div>
-                      {i>0&&<button onClick={()=>setHotels(hs=>hs.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>✕ حذف</button>}
-                    </div>
-                    <Label>المدينة</Label>
-                    <Field placeholder={dest} value={h.city} onChange={v=>setHotels(hs=>hs.map((x,j)=>j===i?{...x,city:v}:x))} icon="📍"/>
-                    <div style={{height:10}}/>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {hotels.map((h, i) => (
+                  <div key={i} style={{ background: '#FAFAFA', borderRadius: 12, padding: 13 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 8 }}>🏨 فندق {h.city}</div>
                     <Label>تصنيف النجوم</Label>
-                    <Stars value={h.stars} onChange={v=>setHotels(hs=>hs.map((x,j)=>j===i?{...x,stars:v}:x))}/>
-                    <div style={{height:10}}/>
+                    <Stars value={h.stars} onChange={v => setHotels(hs => hs.map((x, j) => j === i ? { ...x, stars: v } : x))} />
+                    <div style={{ height: 8 }} />
                     <Label>اسم فندق مقترح (اختياري)</Label>
-                    <Field placeholder="Hilton، Marriott..." value={h.name} onChange={v=>setHotels(hs=>hs.map((x,j)=>j===i?{...x,name:v}:x))} icon="🏨"/>
+                    <input placeholder="Hilton، Marriott، Sheraton..." value={h.name} onChange={e => setHotels(hs => hs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} style={inputStyle} onFocus={e => e.target.style.borderColor = C.orange} onBlur={e => e.target.style.borderColor = C.border} />
+                    <div style={{ height: 8 }} />
+                    <div onClick={() => setHotels(hs => hs.map((x, j) => j === i ? { ...x, breakfast: !x.breakfast } : x))} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 0' }}>
+                      <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${h.breakfast ? C.orange : C.border}`, background: h.breakfast ? C.orange : C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {h.breakfast && <span style={{ color: C.white, fontSize: 12, fontWeight: 800 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: 13, color: C.ink, fontWeight: h.breakfast ? 600 : 400 }}>شامل الإفطار</div>
+                    </div>
                   </div>
                 ))}
-                <button onClick={()=>setHotels(hs=>[...hs,{stars:4,name:"",city:""}])} style={{border:`1.5px dashed ${C.orange}`,background:C.light,borderRadius:12,padding:"11px",fontFamily:"inherit",fontSize:13,fontWeight:700,color:C.orange,cursor:"pointer"}}>
-                  + إضافة فندق في مدينة أخرى
-                </button>
               </div>
-            </SvcCard>
+            )}
+          </SvcCard>
 
-            <SvcCard icon="📱" title="شرائح جوال" sub="شرائح إنترنت دولية" active={svcs.sim} onToggle={()=>s("sim",!svcs.sim)} color={C.green} bg={C.greenBg}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:600,color:C.ink}}>عدد الشرائح</div>
-                  <div style={{fontSize:12,color:C.gray,marginTop:2}}>إنترنت غير محدود</div>
-                </div>
-                <Stepper value={svcs.simQty} onChange={v=>s("simQty",v)} min={1} max={10}/>
+          {/* ٧ - شرائح */}
+          <SvcCard icon="📱" title="شرائح جوال" sub="20 قيقا — إنترنت دولي" active={svcs.sim} onToggle={() => s('sim', !svcs.sim)} color={C.green} bg={C.greenBg}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>عدد الشرائح</div>
+                <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>20 قيقا لكل شريحة</div>
               </div>
-            </SvcCard>
+              <Stepper value={svcs.simQty} onChange={v => s('simQty', v)} min={1} max={10} />
+            </div>
+          </SvcCard>
 
-            <SvcCard icon="🎟️" title="تذاكر سياحية" sub="حجز المعالم والأماكن" active={svcs.tickets} onToggle={()=>s("tickets",!svcs.tickets)} color={C.amber} bg={C.amberBg}>
-              <Label>الأماكن في {dest||"..."}</Label>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {destAttrs.map(a=>(
-                  <Chip key={a} label={a} active={attractions.includes(a)} onClick={()=>setAttractions(p=>p.includes(a)?p.filter(x=>x!==a):[...p,a])} color={C.amber} bg={C.amberBg}/>
+          {/* ٨ - تذاكر */}
+          <SvcCard icon="🎟️" title="تذاكر سياحية" sub="حجز المعالم حسب مسار رحلتك" active={svcs.tickets} onToggle={() => s('tickets', !svcs.tickets)} color={C.amber} bg={C.amberBg}>
+            {allCityAttractions.length === 0 ? (
+              <div style={{ fontSize: 13, color: C.gray, textAlign: 'center', padding: '10px 0' }}>⚠️ حدد المدن في مسار رحلتك أولاً</div>
+            ) : (
+              <div>
+                {cities.filter(c => c.city && attrMap[c.city]).map(c => (
+                  <div key={c.city} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 8 }}>📍 {c.city}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                      {(attrMap[c.city] || []).map(a => {
+                        const key = `${c.city}||${a.name}`
+                        const isSelected = selectedAttractions.includes(key)
+                        return (
+                          <button key={key} onClick={() => setSelectedAttractions(p => p.includes(key) ? p.filter(x => x !== key) : [...p, key])} style={{ border: `1.5px solid ${isSelected ? C.amber : C.border}`, background: isSelected ? C.amberBg : C.white, color: isSelected ? C.amber : C.gray, borderRadius: 20, padding: '5px 12px', fontSize: 12, fontWeight: isSelected ? 700 : 500, fontFamily: 'inherit', cursor: 'pointer' }}>
+                            {a.name} {a.price > 0 ? `✓` : ''}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 ))}
+                {ticketTotal > 0 && (
+                  <div style={{ background: C.amberBg, borderRadius: 10, padding: '8px 12px', fontSize: 12, color: C.amber, fontWeight: 700, marginTop: 4 }}>
+                    ✓ المعالم المختارة: {ticketTotal.toFixed(0)}$ ({adults} بالغ{children > 0 ? ` + ${children} أطفال` : ''})
+                  </div>
+                )}
               </div>
-            </SvcCard>
+            )}
+          </SvcCard>
 
-            <SvcCard icon="📋" title="تصميم البرنامج السياحي اليومي" sub="جدول يومي مفصّل لرحلتك" active={svcs.program} onToggle={()=>s("program",!svcs.program)}>
-              {svcs.program&&<div style={{background:C.light,borderRadius:10,padding:"11px 13px",fontSize:13,color:C.ink}}>🤖 سيصمم الذكاء الاصطناعي برنامجاً يومياً مخصصاً</div>}
-            </SvcCard>
+          {/* ٩ - برنامج */}
+          <SvcCard icon="📋" title="تصميم البرنامج السياحي اليومي" sub="يُصمم تلقائياً بالذكاء الاصطناعي" active={svcs.program} onToggle={() => s('program', !svcs.program)}>
+            {svcs.program && (
+              <div style={{ background: C.light, borderRadius: 10, padding: '11px 13px', fontSize: 13, color: C.ink, lineHeight: 1.6 }}>
+                🤖 سيُصمم الذكاء الاصطناعي برنامجاً يومياً مفصلاً يشمل أوقات الزيارات والمطاعم والتنقلات لكل مدينة
+              </div>
+            )}
+          </SvcCard>
+        </div>
+
+        {activeCnt > 0 && (
+          <div style={{ padding: '0 20px 24px' }}>
+            <button onClick={() => setStep(4)} style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: 16, cursor: 'pointer', background: `linear-gradient(135deg,${C.orange},${C.dark})`, color: C.white, boxShadow: '0 6px 20px rgba(242,101,34,0.35)' }}>
+              متابعة — {activeCnt} خدمات ←
+            </button>
           </div>
-          {activeCnt>0&&(
-            <div style={{padding:"0 20px 24px"}}>
-              <button onClick={()=>setStep(3)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",fontFamily:"inherit",fontWeight:800,fontSize:16,cursor:"pointer",background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,boxShadow:"0 6px 20px rgba(242,101,34,0.35)"}}>
-                متابعة — {activeCnt} خدمات ←
+        )}
+      </div>
+    </div>
+  )
+
+  // ── STEP 4: الإرسال ──
+  return (
+    <div>
+      <Progress />
+      <div>
+        <button onClick={() => setStep(3)} style={{ background: 'none', border: 'none', color: C.orange, fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '16px 20px 8px', display: 'flex', alignItems: 'center', gap: 5 }}>← رجوع</button>
+        <div style={{ padding: '0 20px 24px' }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, marginBottom: 2 }}>ملاحظات إضافية 💬</div>
+          <div style={{ fontSize: 13, color: C.gray, marginBottom: 16 }}>
+            {cities.filter(c=>c.city).map(c=>c.city).join(' ← ')} · {totalTravelers} مسافر · {activeCnt} خدمات
+          </div>
+
+          {/* ملخص */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16 }}>
+            {svcs.flight && <Chip label="✈️ طيران" active color={C.blue} bg={C.blueBg} />}
+            {svcs.visa && <Chip label="📄 تأشيرة (٨٥٠ ريال)" active color={C.purple} bg={C.purpleBg} />}
+            {svcs.arrival && <Chip label={`🚖 استقبال${svcs.arrVip?' VIP':''}`} active color={C.red} bg={C.redBg} />}
+            {svcs.departure && <Chip label={`🛫 توديع${svcs.depVip?' VIP':''}`} active color={C.red} bg={C.redBg} />}
+            {svcs.car && <Chip label={`🚗 سيارة · ${svcs.carDays==='عدد أيام'?`${svcs.carCustomDays} أيام`:svcs.carDays}`} active color={C.green} bg={C.greenBg} />}
+            {svcs.hotel && <Chip label={`🏨 ${hotels.length} فندق`} active />}
+            {svcs.sim && <Chip label={`📱 ${svcs.simQty} شرائح (20 قيقا)`} active color={C.green} bg={C.greenBg} />}
+            {svcs.tickets && selectedAttractions.length > 0 && <Chip label={`🎟️ ${selectedAttractions.length} معالم`} active color={C.amber} bg={C.amberBg} />}
+            {svcs.program && <Chip label="📋 برنامج يومي" active />}
+          </div>
+
+          <Label>ملاحظات خاصة (اختياري)</Label>
+          <textarea
+            placeholder="مثال: وجبات حلال فقط، غرفة ذوي احتياجات خاصة، معنا طفل رضيع..."
+            value={notes} onChange={e => setNotes(e.target.value)} rows={4}
+            style={{ width: '100%', border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', fontFamily: 'inherit', fontSize: 14, color: C.ink, outline: 'none', resize: 'none', direction: 'rtl', boxSizing: 'border-box', transition: 'border .15s' }}
+            onFocus={e => e.target.style.borderColor = C.orange}
+            onBlur={e => e.target.style.borderColor = C.border}
+          />
+
+          <div style={{ height: 16 }} />
+
+          <div style={{ background: C.light, border: `1px solid ${C.orange}33`, borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.orange, marginBottom: 8 }}>🤖 ماذا سيحدث بعد الإرسال؟</div>
+            {['سيتم حفظ طلبك في المنصة', 'الشركات السياحية ستستقبل طلبك وترسل عروضاً', 'ستصلك العروض في صفحة العروض خلال ٢٤ ساعة'].map((t, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 6 }}>
+                <span style={{ color: C.green, fontWeight: 700, flexShrink: 0 }}>✓</span>
+                <span style={{ fontSize: 13, color: C.ink }}>{t}</span>
+              </div>
+            ))}
+          </div>
+
+          {!done ? (
+            <button onClick={handleSend} disabled={aiState === 'loading'} style={{ width: '100%', padding: '15px', borderRadius: 14, border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: 16, cursor: aiState === 'loading' ? 'not-allowed' : 'pointer', background: aiState === 'loading' ? C.gray : `linear-gradient(135deg,${C.orange},${C.dark})`, color: C.white, boxShadow: '0 6px 20px rgba(242,101,34,0.35)' }}>
+              {aiState === 'loading' ? '⏳ جاري الإرسال...' : '🚀 إرسال الطلب للشركات'}
+            </button>
+          ) : (
+            <div style={{ background: C.greenBg, border: `1.5px solid ${C.green}`, borderRadius: 16, padding: '20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.green, marginBottom: 4 }}>تم إرسال طلبك!</div>
+              <div style={{ fontSize: 13, color: C.gray, marginBottom: 14 }}>ستصلك العروض خلال ٢٤ ساعة</div>
+              <button onClick={() => setPage('offers')} style={{ background: `linear-gradient(135deg,${C.orange},${C.dark})`, color: C.white, border: 'none', borderRadius: 10, padding: '10px 24px', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                متابعة العروض ←
               </button>
             </div>
           )}
         </div>
-      )}
-
-      {step===3&&(
-        <div>
-          <button onClick={()=>setStep(2)} style={{background:"none",border:"none",color:C.orange,fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,padding:"16px 20px 8px"}}>← رجوع</button>
-          <div style={{padding:"0 20px 24px"}}>
-            <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:2}}>ملاحظات إضافية 💬</div>
-            <div style={{fontSize:13,color:C.gray,marginBottom:16}}>{dest} · {travelers} مسافر · {activeCnt} خدمات</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:18}}>
-              {svcs.flight&&<Chip label="✈️ طيران" active color={C.blue} bg={C.blueBg}/>}
-              {svcs.visa&&<Chip label="📄 تأشيرة" active color={C.purple} bg={C.purpleBg}/>}
-              {svcs.arrival&&<Chip label={`🚖 استقبال${svcs.arrVip?" VIP":""}`} active color={C.red} bg={C.redBg}/>}
-              {svcs.departure&&<Chip label={`🛫 توديع${svcs.depVip?" VIP":""}`} active color={C.red} bg={C.redBg}/>}
-              {svcs.car&&<Chip label={`🚗 سيارة · ${svcs.carPeriod}`} active color={C.green} bg={C.greenBg}/>}
-              {svcs.hotel&&<Chip label={`🏨 ${hotels.length} فندق`} active/>}
-              {svcs.sim&&<Chip label={`📱 ${svcs.simQty} شرائح`} active color={C.green} bg={C.greenBg}/>}
-              {svcs.tickets&&<Chip label="🎟️ تذاكر" active color={C.amber} bg={C.amberBg}/>}
-              {svcs.program&&<Chip label="📋 برنامج يومي" active/>}
-            </div>
-            <Label>ملاحظات إضافية (اختياري)</Label>
-            <textarea placeholder="مثال: وجبات حلال، غرفة ذوي احتياجات خاصة، معنا طفل عمره سنتان..." value={notes} onChange={e=>setNotes(e.target.value)} rows={4}
-              style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontFamily:"inherit",fontSize:14,color:C.ink,outline:"none",resize:"none",direction:"rtl",boxSizing:"border-box"}}
-              onFocus={e=>e.target.style.borderColor=C.orange} onBlur={e=>e.target.style.borderColor=C.border}
-            />
-            <div style={{height:16}}/>
-            <div style={{background:C.light,border:`1px solid ${C.orange}33`,borderRadius:14,padding:"14px 16px",marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:700,color:C.orange,marginBottom:8}}>🤖 ماذا سيفعل الذكاء الاصطناعي؟</div>
-              {["ترجمة طلبك للغة المحلية للشركات","تنسيق جميع خدماتك احترافياً","إرساله لجميع الشركات المسجلة"].map((t,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,marginTop:6}}>
-                  <span style={{color:C.green,fontWeight:700}}>✓</span>
-                  <span style={{fontSize:13,color:C.ink}}>{t}</span>
-                </div>
-              ))}
-            </div>
-            {!done?(
-              <button onClick={handleAI} disabled={aiState==="loading"} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",fontFamily:"inherit",fontWeight:800,fontSize:16,cursor:aiState==="loading"?"not-allowed":"pointer",background:aiState==="loading"?C.gray:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,boxShadow:"0 6px 20px rgba(242,101,34,0.35)"}}>
-                {aiState==="loading"?"⏳ يترجم ويرسل...":"🚀 إرسال الطلب للشركات"}
-              </button>
-            ):(
-              <div style={{background:C.greenBg,border:`1.5px solid ${C.green}`,borderRadius:16,padding:"20px",textAlign:"center",marginBottom:16}}>
-                <div style={{fontSize:36,marginBottom:8}}>✅</div>
-                <div style={{fontSize:18,fontWeight:800,color:C.green,marginBottom:4}}>تم إرسال طلبك!</div>
-                <div style={{fontSize:13,color:C.gray}}>ستصلك العروض خلال ٢٤ ساعة</div>
-                <button onClick={()=>setPage("offers")} style={{marginTop:14,background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:"none",borderRadius:10,padding:"10px 24px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                  متابعة العروض ←
-                </button>
-              </div>
-            )}
-            {aiResult&&(
-              <div style={{marginTop:14,background:C.white,borderRadius:14,padding:"15px 16px",border:`1.5px solid ${C.orange}44`}}>
-                <div style={{fontSize:12,color:C.orange,fontWeight:700,marginBottom:8}}>🤖 الترجمة المُرسلة للشركات</div>
-                <div style={{fontSize:13,color:C.ink,lineHeight:1.75,direction:"ltr",textAlign:"left",fontFamily:"Georgia,serif",whiteSpace:"pre-wrap"}}>{aiResult}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
-  );
-};
-
+  )
+}
 // ── OFFERS ────────────────────────────────────────────────────────
 const Offers = ()=>{
   const [offers, setOffers] = useState([]);
@@ -640,6 +871,68 @@ const Offers = ()=>{
 };
 
 // ── TRIPS ─────────────────────────────────────────────────────────
+const Bookings = ()=>{
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(()=>{ fetchBookings() },[])
+
+  const fetchBookings = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: requests } = await supabase
+      .from('trip_requests').select('id').eq('user_id', user.id)
+    if (!requests || requests.length === 0) { setLoading(false); return }
+    const requestIds = requests.map(r => r.id)
+    const { data } = await supabase
+      .from('offers')
+      .select('*, trip_requests(destination, travelers, created_at)')
+      .in('request_id', requestIds)
+      .eq('status', 'accepted')
+      .order('created_at', { ascending: false })
+    setBookings(data || [])
+    setLoading(false)
+  }
+
+  if (loading) return <div style={{textAlign:'center',padding:40,color:C.gray}}>جاري التحميل...</div>
+
+  return(
+    <div style={{padding:"16px 20px 24px"}}>
+      <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>رحلاتي ✈️</div>
+      <div style={{fontSize:13,color:C.gray,marginBottom:16}}>{bookings.length} رحلات مؤكدة</div>
+
+      {bookings.length === 0 && (
+        <div style={{textAlign:"center",padding:40,background:C.white,borderRadius:16,border:`1px solid ${C.border}`}}>
+          <div style={{fontSize:32,marginBottom:8}}>✈️</div>
+          <div style={{fontSize:15,color:C.gray}}>لا توجد رحلات مؤكدة بعد</div>
+          <div style={{fontSize:13,color:C.gray,marginTop:4}}>بعد قبول عرض سيظهر هنا</div>
+        </div>
+      )}
+
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {bookings.map((b)=>(
+          <div key={b.id} style={{background:C.white,borderRadius:16,padding:"16px",border:`1.5px solid ${C.green}`,boxShadow:`0 0 0 3px ${C.green}12`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+              <div>
+                <div style={{fontSize:16,fontWeight:700,color:C.ink,marginBottom:3}}>🌍 {b.trip_requests?.destination}</div>
+                <div style={{fontSize:12,color:C.gray}}>👥 {b.trip_requests?.travelers} مسافرين</div>
+                <div style={{fontSize:11,color:C.gray,marginTop:2}}>{new Date(b.created_at).toLocaleDateString('ar-SA')}</div>
+                {b.description && <div style={{fontSize:12,color:C.gray,marginTop:6,background:C.muted,borderRadius:6,padding:'4px 8px'}}>{b.description}</div>}
+              </div>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:20,fontWeight:800,color:C.orange}}>{b.price}</div>
+                <div style={{fontSize:10,color:C.gray}}>ريال</div>
+                <div style={{background:C.greenBg,color:C.green,borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700,marginTop:4}}>مؤكدة ✓</div>
+              </div>
+            </div>
+            <button style={{width:'100%',background:C.greenBg,color:C.green,border:`1px solid #86EFAC`,borderRadius:10,padding:"10px",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+              📞 تواصل مع الشركة
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 const Trips = ()=>{
   const [trips, setTrips] = useState([])
   const [loading, setLoading] = useState(true)
@@ -907,9 +1200,9 @@ if (session?.user?.user_metadata?.role === 'company') return <CompanyDashboard /
 if (session?.user?.user_metadata?.role === 'admin') return <AdminDashboard />
 const tabs = [
     {id:"home",label:"الرئيسية",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>},
-    {id:"request",label:"طلب رحلة",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.1 6.1l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/><path d="M14.05 2a9 9 0 0 1 8 7.94"/><path d="M14.05 6A5 5 0 0 1 18 10"/></svg>},
-    {id:"offers",label:"العروض",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>},
-    {id:"trips",label:"رحلاتي",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>},
+    {id:"trips",label:"طلباتي",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>},
+    {id:"bookings",label:"رحلاتي",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>},
+    {id:"request",label:"طلب رحلة",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>},
     {id:"profile",label:"حسابي",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>},
   ];
   return (
@@ -932,7 +1225,8 @@ const tabs = [
           {page==="home"&&<Home setPage={setPage}/>}
           {page==="request"&&<Request setPage={setPage}/>}
           {page==="offers"&&<Offers/>}
-          {page==="trips"&&<Trips/>}
+{page==="trips"&&<Trips/>}
+{page==="bookings"&&<Bookings/>}
           {page==="profile"&&<Profile/>}
         </div>
 
