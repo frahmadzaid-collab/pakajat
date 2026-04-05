@@ -957,19 +957,24 @@ const Trips = ()=>{
   const [tripOffers, setTripOffers] = useState({})
   const [filter, setFilter] = useState('all')
 
-  useEffect(()=>{ fetchTrips() },[])
+useEffect(()=>{ fetchTrips() },[filter])
 
   const fetchTrips = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data } = await supabase
-      .from('trip_requests')
-      .select('*, offers(count)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-    setTrips(data || [])
-    setLoading(false)
-  }
-
+  const { data: { user } } = await supabase.auth.getUser()
+  const isArchived = filter === 'archived'
+  const { data } = await supabase
+    .from('trip_requests')
+    .select('*, offers(count)')
+    .eq('user_id', user.id)
+    .eq('archived', isArchived)
+    .order('created_at', { ascending: false })
+  setTrips(data || [])
+  setLoading(false)
+}
+const deleteTrip = async (id) => {
+  await supabase.from('trip_requests').update({ archived: true }).eq('id', id)
+  fetchTrips()
+}
   const fetchTripOffers = async (tripId) => {
     if (tripOffers[tripId]) {
       setExpandedId(expandedId === tripId ? null : tripId)
@@ -1050,7 +1055,8 @@ const requestNegotiation = async (offerId, tripId, offerPrice) => {
 
       {/* فلتر */}
       <div style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto',paddingBottom:4}}>
-        {[['all','الكل'],['open','مفتوحة'],['closed','مغلقة']].map(([val,label])=>(
+        {[['all','الكل'],['open','مفتوحة'],['closed','مغلقة'],['archived','الأرشيف']]
+.map(([val,label])=>(
           <button key={val} onClick={()=>setFilter(val)} style={{border:`1.5px solid ${filter===val?C.orange:C.border}`,background:filter===val?C.light:C.white,color:filter===val?C.orange:C.gray,borderRadius:20,padding:'5px 14px',fontSize:13,fontWeight:filter===val?700:500,fontFamily:'inherit',cursor:'pointer',whiteSpace:'nowrap'}}>
             {label}
           </button>
