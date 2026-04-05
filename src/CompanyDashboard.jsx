@@ -189,8 +189,15 @@ export default function CompanyDashboard() {
                         <div style={{ fontSize: 12, color: C.gray }}>👥 {r.travelers} مسافرين</div>
                         <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{new Date(r.created_at).toLocaleDateString('ar-SA')}</div>
                       </div>
-                      <span style={{ background: C.greenBg, color: C.green, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>مفتوح</span>
-                    </div>
+<div style={{display:'flex',flexDirection:'column',gap:4,alignItems:'flex-end'}}>
+  <span style={{ background: C.greenBg, color: C.green, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>مفتوح</span>
+  {r.negotiation_done && (
+    <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>🔄 إعادة تفاوض</span>
+  )}
+  {r.best_price && (
+    <span style={{ background: '#FEF3C7', color: '#D97706', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>💰 أفضل سعر: {r.best_price} ريال</span>
+  )}
+</div>                    </div>
                     {r.notes && <div style={{ fontSize: 13, color: C.gray, background: C.muted, borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>{r.notes}</div>}
                     {r.ai_translation && (
                       <div style={{ fontSize: 12, color: C.ink, background: C.light, border: `1px solid ${C.orange}33`, borderRadius: 8, padding: '8px 12px', marginBottom: 10, direction: 'ltr', textAlign: 'left' }}>

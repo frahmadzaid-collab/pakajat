@@ -282,6 +282,7 @@ const Request = ({setPage})=>{
 
   // الخطوة ٤ — ملاحظات + إرسال
   const [notes, setNotes] = useState('')
+  const [offerDuration, setOfferDuration] = useState(24)
   const [aiState, setAiState] = useState('idle')
   const [done, setDone] = useState(false)
 
@@ -364,7 +365,11 @@ const Request = ({setPage})=>{
         services: { ...svcs, flights, hotels, selectedAttractions, adults, children, dateFrom, dateTo, cities },
         notes: notes,
         ai_translation: buildSummary(),
-        status: 'open'
+        status: 'open',
+offer_duration: offerDuration,
+expires_at: new Date(Date.now() + offerDuration * 60 * 60 * 1000).toISOString(),
+best_price: null,
+negotiation_done: false,
       })
 
       // إرسال إيميل
@@ -714,7 +719,19 @@ const Request = ({setPage})=>{
             {svcs.tickets && selectedAttractions.length > 0 && <Chip label={`🎟️ ${selectedAttractions.length} معالم`} active color={C.amber} bg={C.amberBg} />}
             {svcs.program && <Chip label="📋 برنامج يومي" active />}
           </div>
-
+<div style={{marginBottom:16}}>
+  <Label>⏱ مدة استقبال العروض</Label>
+  <div style={{display:'flex',gap:8}}>
+    {[24,48,72].map(h=>(
+      <button key={h} onClick={()=>setOfferDuration(h)} style={{flex:1,border:`1.5px solid ${offerDuration===h?C.orange:C.border}`,background:offerDuration===h?C.light:C.white,color:offerDuration===h?C.orange:C.gray,borderRadius:12,padding:'10px 8px',fontFamily:'inherit',fontWeight:offerDuration===h?700:500,fontSize:13,cursor:'pointer',transition:'all .15s'}}>
+        {h} ساعة
+      </button>
+    ))}
+  </div>
+  <div style={{fontSize:11,color:C.gray,marginTop:6}}>
+    تنتهي: {dateFrom ? new Date(new Date(dateFrom).getTime() + offerDuration*60*60*1000).toLocaleDateString('ar-SA') : 'بعد إرسال الطلب'}
+  </div>
+</div>
           <Label>ملاحظات خاصة (اختياري)</Label>
           <textarea
             placeholder="مثال: وجبات حلال فقط، غرفة ذوي احتياجات خاصة، معنا طفل رضيع..."
@@ -968,23 +985,56 @@ const Trips = ()=>{
   }
 
   const acceptOffer = async (offerId, tripId) => {
-    await supabase.from('offers').update({ status: 'accepted' }).eq('id', offerId)
-    await supabase.from('trip_requests').update({ status: 'closed' }).eq('id', tripId)
-    fetchTrips()
-    const { data } = await supabase.from('offers').select('*').eq('request_id', tripId)
-    setTripOffers(p => ({ ...p, [tripId]: data || [] }))
+  await supabase.from('offers').update({ status: 'accepted' }).eq('id', offerId)
+  await supabase.from('trip_requests').update({ status: 'closed' }).eq('id', tripId)
+  fetchTrips()
+  const { data } = await supabase.from('offers').select('*').eq('request_id', tripId)
+  setTripOffers(p => ({ ...p, [tripId]: data || [] }))
   }
 
   const rejectOffer = async (offerId, tripId) => {
-    await supabase.from('offers').update({ status: 'rejected' }).eq('id', offerId)
-    const { data } = await supabase.from('offers').select('*').eq('request_id', tripId)
-    setTripOffers(p => ({ ...p, [tripId]: data || [] }))
+  await supabase.from('offers').update({ status: 'rejected' }).eq('id', offerId)
+  const { data } = await supabase.from('offers').select('*').eq('request_id', tripId)
+  setTripOffers(p => ({ ...p, [tripId]: data || [] }))
+}
+
+const requestNegotiation = async (offerId, tripId, offerPrice) => {
+  // تحقق أن التفاوض لم يُستخدم من قبل
+  const { data: offer } = await supabase.from('offers').select('negotiation_count').eq('id', offerId).single()
+  if (offer?.negotiation_count >= 1) {
+    alert('لا يمكن طلب التفاوض أكثر من مرة واحدة لكل عرض')
+    return
   }
 
-  const deleteTrip = async (id) => {
-    await supabase.from('trip_requests').delete().eq('id', id)
-    fetchTrips()
-  }
+  // تحديث العرض
+  await supabase.from('offers').update({ 
+    negotiation_requested: true, 
+    negotiation_count: 1,
+    status: 'negotiating'
+  }).eq('id', offerId)
+
+  // إعادة فتح الطلب مع أفضل سعر
+  await supabase.from('trip_requests').update({ 
+    status: 'open',
+    best_price: offerPrice,
+    negotiation_done: true
+  }).eq('id', tripId)
+
+  // إشعار الشركات بأفضل سعر
+  await fetch('https://uwmxximdupgfhfypdzll.supabase.co/functions/v1/quick-action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+    body: JSON.stringify({
+      to: 'fr.ahmad.zaid@gmail.com',
+      subject: '🔄 إعادة تفاوض — فرصة لتقديم عرض أفضل',
+      body: `العميل طلب إعادة التفاوض.<br/>أفضل سعر وصله: <strong>${offerPrice} ريال</strong><br/>هل تريد تقديم عرض أفضل؟`
+    })
+  })
+
+  fetchTrips()
+  const { data } = await supabase.from('offers').select('*').eq('request_id', tripId)
+  setTripOffers(p => ({ ...p, [tripId]: data || [] }))
+}
 
   const filtered = trips.filter(t => {
     if (filter === 'all') return true
@@ -1074,11 +1124,36 @@ const Trips = ()=>{
                           </div>
                         </div>
                         {o.status==='pending'&&(
-                          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8}}>
-                            <button onClick={()=>acceptOffer(o.id,t.id)} style={{background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:9,padding:'9px',fontFamily:'inherit',fontWeight:700,fontSize:12,cursor:'pointer'}}>✓ قبول العرض</button>
-                            <button onClick={()=>rejectOffer(o.id,t.id)} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:9,padding:'9px',fontFamily:'inherit',fontSize:12,cursor:'pointer',fontWeight:600}}>رفض</button>
-                          </div>
-                        )}
+  <div style={{display:'flex',flexDirection:'column',gap:8}}>
+    <button onClick={()=>acceptOffer(o.id,t.id)} style={{width:'100%',background:`linear-gradient(135deg,${C.orange},${C.dark})`,color:C.white,border:'none',borderRadius:9,padding:'10px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+      ✅ قبول العرض
+    </button>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+      {!t.negotiation_done ? (
+        <button onClick={()=>requestNegotiation(o.id,t.id,o.price)} style={{background:'#EFF6FF',color:'#2563EB',border:'1px solid #BFDBFE',borderRadius:9,padding:'9px',fontFamily:'inherit',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+          🤝 تفاوض
+        </button>
+      ) : (
+        <button disabled style={{background:C.muted,color:C.gray,border:`1px solid ${C.border}`,borderRadius:9,padding:'9px',fontFamily:'inherit',fontSize:12,cursor:'not-allowed'}}>
+          🚫 تم التفاوض
+        </button>
+      )}
+      <button onClick={()=>rejectOffer(o.id,t.id)} style={{background:'#FEF2F2',color:'#DC2626',border:'1px solid #FECACA',borderRadius:9,padding:'9px',fontFamily:'inherit',fontSize:12,cursor:'pointer',fontWeight:600}}>
+        ❌ رفض
+      </button>
+    </div>
+  </div>
+)}
+{o.status==='negotiating'&&(
+  <div style={{background:'#EFF6FF',borderRadius:9,padding:'10px',textAlign:'center',fontSize:12,color:'#2563EB',fontWeight:600}}>
+⏸️ العرض الأول — تم طلب التفاوض
+  </div>
+)}
+{o.status==='pending'&&o.negotiation_count>=1&&(
+  <div style={{background:'#FEF3C7',borderRadius:9,padding:'8px',textAlign:'center',fontSize:11,color:'#D97706',fontWeight:600,marginTop:4}}>
+    ⚠️ لا يمكن طلب التفاوض مرة أخرى على هذا العرض
+  </div>
+)}
                       </div>
                     ))}
                   </div>
