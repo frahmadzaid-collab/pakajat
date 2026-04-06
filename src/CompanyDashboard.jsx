@@ -94,6 +94,8 @@ export default function CompanyDashboard() {
   const [user, setUser] = useState(null)
   const [companyName, setCompanyName] = useState('')
   const [editingName, setEditingName] = useState(false)
+  const [companyData, setCompanyData] = useState(null)
+const [uploadingLogo, setUploadingLogo] = useState(false)
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ total: 0, accepted: 0, pending: 0 })
 
@@ -105,6 +107,13 @@ export default function CompanyDashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     setUser(user)
     setCompanyName(user?.user_metadata?.full_name || 'شركتي السياحية')
+    // جلب بيانات الشركة
+const { data: companyInfo } = await supabase
+  .from('companies')
+  .select('*')
+  .eq('user_id', user.id)
+  .single()
+setCompanyData(companyInfo || {})
 
     // جلب الطلبات المفتوحة
     const { data: reqs } = await supabase
@@ -137,7 +146,34 @@ export default function CompanyDashboard() {
     await supabase.auth.updateUser({ data: { full_name: companyName } })
     setEditingName(false)
   }
+const saveCompanyData = async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+  await supabase.auth.updateUser({ data: { full_name: companyName } })
+  await supabase.from('companies').update({
+    company_name: companyName,
+    city: companyData?.city || '',
+    country: companyData?.country || 'السعودية',
+    bio: companyData?.bio || '',
+    website: companyData?.website || '',
+    google_maps: companyData?.google_maps || '',
+    logo_url: companyData?.logo_url || '',
+  }).eq('user_id', user.id)
+  setEditingName(false)
+  alert('✅ تم حفظ البيانات بنجاح!')
+}
 
+const handleLogoUpload = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  setUploadingLogo(true)
+  const { data: { user } } = await supabase.auth.getUser()
+  const fileExt = file.name.split('.').pop()
+  const fileName = `company_${user.id}.${fileExt}`
+  await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
+  const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
+  setCompanyData(p => ({ ...p, logo_url: data.publicUrl + '?t=' + Date.now() }))
+  setUploadingLogo(false)
+}
   const tabs = [
     { id: 'requests', icon: '📬', label: 'الطلبات' },
     { id: 'offers', icon: '📤', label: 'عروضي' },
@@ -273,55 +309,96 @@ export default function CompanyDashboard() {
           )}
 
           {/* PROFILE */}
-          {page === 'profile' && (
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, marginBottom: 16 }}>🏢 شركتي</div>
-              <div style={{ background: C.white, borderRadius: 16, padding: 24, border: `1px solid ${C.border}`, marginBottom: 12 }}>
-                <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: `linear-gradient(135deg,${C.orange},${C.dark})`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: 28, color: C.white }}>🏢</div>
-                  {editingName ? (
-                    <div>
-                      <input value={companyName} onChange={e => setCompanyName(e.target.value)}
-                        style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, border: `1.5px solid ${C.orange}`, borderRadius: 10, padding: '8px 14px', fontFamily: 'inherit', outline: 'none', direction: 'rtl', width: '100%', marginBottom: 8 }}
-                      />
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                        <button onClick={saveName} style={{ background: `linear-gradient(135deg,${C.orange},${C.dark})`, color: C.white, border: 'none', borderRadius: 10, padding: '8px 20px', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>حفظ</button>
-                        <button onClick={() => setEditingName(false)} style={{ background: C.muted, color: C.gray, border: 'none', borderRadius: 10, padding: '8px 14px', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer' }}>إلغاء</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.ink }}>{companyName}</div>
-                      <div style={{ fontSize: 13, color: C.gray, marginTop: 4 }}>{user?.email}</div>
-                      <button onClick={() => setEditingName(true)} style={{ marginTop: 10, background: C.light, color: C.orange, border: `1px solid ${C.orange}33`, borderRadius: 20, padding: '6px 18px', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                        ✏️ تعديل الاسم
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {[['📊', 'إجمالي العروض', stats.total], ['✅', 'عروض مقبولة', stats.accepted], ['📅', 'تاريخ التسجيل', new Date(user?.created_at).toLocaleDateString('ar-SA')]].map(([icon, label, val]) => (
-                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.muted, borderRadius: 10 }}>
-                      <span style={{ fontSize: 18 }}>{icon}</span>
-                      <div style={{ flex: 1, fontSize: 13, color: C.ink }}>{label}</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{val}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <a href="https://wa.me/00966592244551" target="_blank" rel="noopener" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.white, borderRadius: 13, padding: '14px 16px', border: `1px solid ${C.border}`, textDecoration: 'none', marginBottom: 8 }}>
-                <span style={{ fontSize: 20 }}>📞</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>تواصل مع الدعم</div>
-                  <div style={{ fontSize: 12, color: C.gray }}>واتساب — الدعم ٢٤/٧</div>
-                </div>
-                <span style={{ color: C.green, fontSize: 13, fontWeight: 700 }}>واتساب ↗</span>
-              </a>
-              <button onClick={handleLogout} style={{ width: '100%', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 13, padding: '14px 16px', fontFamily: 'inherit', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                🚪 تسجيل الخروج
-              </button>
-            </div>
+{page === 'profile' && (
+  <div>
+    <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, marginBottom: 16 }}>🏢 بيانات شركتي</div>
+
+    <div style={{ background: C.white, borderRadius: 16, padding: 22, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+      
+      {/* الشعار */}
+      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <div style={{ position: 'relative', width: 80, height: 80, margin: '0 auto 12px' }}>
+          {companyData?.logo_url ? (
+            <img src={companyData.logo_url} style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${C.border}` }} />
+          ) : (
+            <div style={{ width: 80, height: 80, borderRadius: '50%', background: `linear-gradient(135deg,${C.orange},${C.dark})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, color: C.white }}>🏢</div>
           )}
+          <label style={{ position: 'absolute', bottom: 0, left: 0, width: 26, height: 26, borderRadius: '50%', background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 13 }}>
+            {uploadingLogo ? '⏳' : '📷'}
+            <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
+          </label>
+        </div>
+        {editingName ? (
+          <div>
+            <input value={companyName} onChange={e => setCompanyName(e.target.value)}
+              style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, border: `1.5px solid ${C.orange}`, borderRadius: 10, padding: '8px 14px', fontFamily: 'inherit', outline: 'none', direction: 'rtl', width: '100%', marginBottom: 8 }} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button onClick={saveCompanyData} style={{ background: `linear-gradient(135deg,${C.orange},${C.dark})`, color: C.white, border: 'none', borderRadius: 10, padding: '8px 20px', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>حفظ</button>
+              <button onClick={() => setEditingName(false)} style={{ background: C.muted, color: C.gray, border: 'none', borderRadius: 10, padding: '8px 14px', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer' }}>إلغاء</button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.ink }}>{companyName}</div>
+            <button onClick={() => setEditingName(true)} style={{ marginTop: 8, background: C.light, color: C.orange, border: `1px solid ${C.orange}33`, borderRadius: 20, padding: '5px 14px', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✏️ تعديل الاسم</button>
+          </div>
+        )}
+      </div>
+
+      {/* البيانات */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {[
+          ['🌍 الدولة', 'country', 'مثال: السعودية'],
+          ['📍 المدينة', 'city', 'مثال: الرياض'],
+          ['📝 نبذة عن الشركة', 'bio', 'اكتب نبذة مختصرة عن شركتك...'],
+          ['🌐 الموقع الإلكتروني', 'website', 'https://yourwebsite.com'],
+          ['📍 رابط قوقل ماب', 'google_maps', 'https://maps.google.com/...'],
+        ].map(([label, key, placeholder]) => (
+          <div key={key}>
+            <div style={{ fontSize: 12, color: C.gray, fontWeight: 600, marginBottom: 5 }}>{label}</div>
+            {key === 'bio' ? (
+              <textarea
+                placeholder={placeholder}
+                value={companyData?.[key] || ''}
+                onChange={e => setCompanyData(p => ({ ...p, [key]: e.target.value }))}
+                rows={3}
+                style={{ width: '100%', border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '10px 13px', fontFamily: 'inherit', fontSize: 13, outline: 'none', resize: 'none', direction: 'rtl', boxSizing: 'border-box' }}
+                onFocus={e => e.target.style.borderColor = C.orange}
+                onBlur={e => e.target.style.borderColor = C.border}
+              />
+            ) : (
+              <input
+                placeholder={placeholder}
+                value={companyData?.[key] || ''}
+                onChange={e => setCompanyData(p => ({ ...p, [key]: e.target.value }))}
+                style={{ width: '100%', border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '10px 13px', fontFamily: 'inherit', fontSize: 13, outline: 'none', boxSizing: 'border-box', direction: key === 'website' || key === 'google_maps' ? 'ltr' : 'rtl' }}
+                onFocus={e => e.target.style.borderColor = C.orange}
+                onBlur={e => e.target.style.borderColor = C.border}
+              />
+            )}
+          </div>
+        ))}
+
+        <button onClick={saveCompanyData} style={{ width: '100%', background: `linear-gradient(135deg,${C.orange},${C.dark})`, color: C.white, border: 'none', borderRadius: 12, padding: '13px', fontFamily: 'inherit', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginTop: 4 }}>
+          💾 حفظ البيانات
+        </button>
+      </div>
+    </div>
+
+    <a href="https://wa.me/00966592244551" target="_blank" rel="noopener" style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.white, borderRadius: 13, padding: '14px 16px', border: `1px solid ${C.border}`, textDecoration: 'none', marginBottom: 8 }}>
+      <span style={{ fontSize: 20 }}>📞</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>تواصل مع الدعم</div>
+        <div style={{ fontSize: 12, color: C.gray }}>واتساب — الدعم ٢٤/٧</div>
+      </div>
+      <span style={{ color: C.green, fontSize: 13, fontWeight: 700 }}>واتساب ↗</span>
+    </a>
+
+    <button onClick={handleLogout} style={{ width: '100%', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 13, padding: '14px 16px', fontFamily: 'inherit', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+      🚪 تسجيل الخروج
+    </button>
+  </div>
+)}
         </div>
 
         {/* Bottom Nav */}
