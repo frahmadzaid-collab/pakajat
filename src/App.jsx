@@ -957,16 +957,15 @@ const Trips = ()=>{
   const [tripOffers, setTripOffers] = useState({})
   const [filter, setFilter] = useState('all')
 
-useEffect(()=>{ fetchTrips() },[filter])
+useEffect(()=>{ fetchTrips(filter) },[filter])
 
-  const fetchTrips = async () => {
+  const fetchTrips = async (currentFilter = filter) => {
   const { data: { user } } = await supabase.auth.getUser()
-  const isArchived = filter === 'archived'
   const { data } = await supabase
     .from('trip_requests')
     .select('*, offers(count)')
     .eq('user_id', user.id)
-    .eq('archived', isArchived)
+    .eq('archived', currentFilter === 'archived')
     .order('created_at', { ascending: false })
   setTrips(data || [])
   setLoading(false)
@@ -1042,9 +1041,10 @@ const requestNegotiation = async (offerId, tripId, offerPrice) => {
 }
 
   const filtered = trips.filter(t => {
-    if (filter === 'all') return true
-    return t.status === filter
-  })
+  if (filter === 'archived') return t.archived === true
+  if (filter === 'all') return true
+  return t.status === filter
+})
 
   if (loading) return <div style={{textAlign:'center',padding:40,color:C.gray}}>جاري التحميل...</div>
 
