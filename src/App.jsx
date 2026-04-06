@@ -1117,28 +1117,34 @@ const requestNegotiation = async (offerId, tripId, offerPrice) => {
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
                           <div>
                             <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
-<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-  {o.companies?.logo_url ? (
-    <img src={o.companies.logo_url} style={{width:36,height:36,borderRadius:'50%',objectFit:'cover',border:`1px solid ${C.border}`,flexShrink:0}} />
-  ) : (
-    <div style={{width:36,height:36,borderRadius:'50%',background:`linear-gradient(135deg,${C.orange},${C.dark})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:C.white,flexShrink:0}}>🏢</div>
+<div style={{marginBottom:10}}>
+  {/* اسم الشركة والشعار */}
+  <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:8}}>
+    {o.companies?.logo_url ? (
+      <img src={o.companies.logo_url} style={{width:40,height:40,borderRadius:10,objectFit:'cover',border:`1px solid ${C.border}`,flexShrink:0}} />
+    ) : (
+      <div style={{width:40,height:40,borderRadius:10,background:`linear-gradient(135deg,${C.orange},${C.dark})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:C.white,flexShrink:0}}>🏢</div>
+    )}
+    <div>
+      <div style={{fontSize:14,fontWeight:700,color:C.ink}}>{o.companies?.company_name || 'شركة سياحية'}</div>
+      {o.companies?.city && <div style={{fontSize:11,color:C.gray,marginTop:1}}>📍 {o.companies?.country || 'السعودية'} — {o.companies.city}</div>}
+      {o.companies?.rating > 0 && <div style={{fontSize:11,color:'#D97706',marginTop:1}}>{'⭐'.repeat(Math.round(o.companies.rating))} {o.companies.rating}</div>}
+    </div>
+  </div>
+  {/* النبذة */}
+  {o.companies?.bio && (
+    <div style={{fontSize:12,color:C.gray,background:'#F8FAFC',borderRadius:8,padding:'8px 10px',marginBottom:8,lineHeight:1.6,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>
+      {o.companies.bio}
+    </div>
   )}
-  <div>
-    <div style={{fontSize:14,fontWeight:700,color:C.ink}}>{o.companies?.company_name || 'شركة سياحية'}</div>
-    {o.companies?.city && <div style={{fontSize:11,color:C.gray}}>📍 {o.companies?.country || 'السعودية'} — {o.companies.city}</div>}
-  </div>
+  {/* الروابط */}
+  {(o.companies?.website || o.companies?.google_maps) && (
+    <div style={{display:'flex',gap:8}}>
+      {o.companies?.website && <a href={o.companies.website} target="_blank" rel="noopener" style={{background:C.blueBg,color:C.blue,borderRadius:8,padding:'4px 10px',fontSize:11,fontWeight:700,textDecoration:'none'}}>🌐 الموقع</a>}
+      {o.companies?.google_maps && <a href={o.companies.google_maps} target="_blank" rel="noopener" style={{background:C.greenBg,color:C.green,borderRadius:8,padding:'4px 10px',fontSize:11,fontWeight:700,textDecoration:'none'}}>📍 الخريطة</a>}
+    </div>
+  )}
 </div>
-{o.companies?.bio && (
-  <div style={{fontSize:12,color:C.gray,background:'#F8FAFC',borderRadius:8,padding:'8px 10px',marginBottom:8,lineHeight:1.6,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>
-    {o.companies.bio}
-  </div>
-)}
-{(o.companies?.website || o.companies?.google_maps) && (
-  <div style={{display:'flex',gap:8,marginBottom:6}}>
-    {o.companies?.website && <a href={o.companies.website} target="_blank" rel="noopener" style={{background:C.blueBg,color:C.blue,borderRadius:8,padding:'4px 10px',fontSize:11,fontWeight:700,textDecoration:'none'}}>🌐 الموقع</a>}
-    {o.companies?.google_maps && <a href={o.companies.google_maps} target="_blank" rel="noopener" style={{background:C.greenBg,color:C.green,borderRadius:8,padding:'4px 10px',fontSize:11,fontWeight:700,textDecoration:'none'}}>📍 الموقع على الخريطة</a>}
-  </div>
-)}
 {o.companies?.rating > 0 && (
   <div style={{fontSize:12,color:'#D97706',marginBottom:4}}>{'⭐'.repeat(Math.round(o.companies.rating))} {o.companies.rating}</div>
 )}                              {o.status==='accepted'&&<span style={{background:C.greenBg,color:C.green,borderRadius:20,padding:'1px 8px',fontSize:10,fontWeight:700}}>مقبول ✓</span>}
