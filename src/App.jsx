@@ -592,10 +592,391 @@ const Bookings = ()=>{
 }
 
 // ── TRIPS ─────────────────────────────────────────────────────────
+// OfferDetailPage — صفحة تفاصيل العرض الاحترافية
+// تُضاف في App.jsx داخل دالة Trips بدل الكود الحالي لـ selectedOffer
+
+const OfferDetailPage = ({ offer: o, trip: t, onBack, onAccept, onNegotiate, onReject }) => {
+  const [activeTab, setActiveTab] = useState('services')
+ const [program, setProgram] = useState({})
+const [loadingProgram, setLoadingProgram] = useState({})
+
+const generateDayProgram = async (day) => {
+  if (program[day.day]) return
+  setLoadingProgram(p => ({ ...p, [day.day]: true }))
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: `أنت مرشد سياحي خبير. اكتب برنامجاً سياحياً يومياً مفصلاً لـ ${svc?.adults || 2} بالغين في مدينة ${day.city} ليوم ${day.from}. البرنامج يشمل: الإفطار، الأنشطة الصباحية، الغداء، الأنشطة المسائية، العشاء. اذكر أسماء مطاعم حلال ومعالم سياحية حقيقية. اكتب بالعربية.`
+      }]
+    })
+  })
+  const data = await res.json()
+  const text = data.content?.[0]?.text || 'تعذر توليد البرنامج'
+  setProgram(p => ({ ...p, [day.day]: text }))
+  setLoadingProgram(p => ({ ...p, [day.day]: false }))
+}
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [copied, setCopied] = useState('')
+
+  const tabs = [
+    { id: 'services', label: 'الخدمات', icon: '🛎️' },
+    { id: 'program', label: 'البرنامج', icon: '📅' },
+    { id: 'invoice', label: 'الفاتورة', icon: '💰' },
+  ]
+
+  const handleCopy = (text, key) => {
+    navigator.clipboard.writeText(text)
+    setCopied(key)
+    setTimeout(() => setCopied(''), 2000)
+  }
+
+  const handleReject = () => {
+    onReject(o.id, o.request_id, rejectReason)
+    setShowRejectModal(false)
+  }
+
+  const svc = t?.services ? (typeof t.services === 'string' ? JSON.parse(t.services) : t.services) : {}
+
+  const getServiceIcon = (type) => {
+    const icons = { flight: '✈️', hotel: '🏨', visa: '📄', arrival: '🚖', departure: '🛫', car: '🚗', sim: '📱', tickets: '🎟️', program: '📋' }
+    return icons[type] || '📌'
+  }
+
+  const cities = svc.cities || []
+  const programDays = cities.length > 0 ? cities.map((c, i) => ({
+    day: i + 1,
+    city: c.city,
+    from: c.from,
+    to: c.to,
+    nights: c.from && c.to ? Math.ceil((new Date(c.to) - new Date(c.from)) / (1000*60*60*24)) : 0,
+  })) : []
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#F3F4F6', paddingBottom: 100 }}>
+
+      {/* Header */}
+      <div style={{ background: `linear-gradient(135deg,#F26522,#D4521A)`, padding: '0 0 0 0' }}>
+        <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 10, padding: '8px 14px', color: 'white', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>← رجوع</button>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>تفاصيل العرض</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>🌍 {o.trip_requests?.destination}</div>
+          </div>
+        </div>
+
+        {/* معلومات الشركة */}
+        <div style={{ background: 'white', margin: '0 16px', borderRadius: 16, padding: '16px', marginBottom: -20, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+            {o.companies?.logo_url ? (
+              <img src={o.companies.logo_url} style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', border: '1px solid #E5E7EB', flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 52, height: 52, borderRadius: 12, background: 'linear-gradient(135deg,#F26522,#D4521A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'white', flexShrink: 0 }}>🏢</div>
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#111827' }}>{o.companies?.company_name || 'شركة سياحية'}</div>
+              {o.companies?.city && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>📍 {o.companies?.country || 'السعودية'} — {o.companies.city}</div>}
+              {o.companies?.rating > 0 && <div style={{ fontSize: 12, color: '#D97706', marginTop: 2 }}>{'⭐'.repeat(Math.round(o.companies.rating))} {o.companies.rating}</div>}
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: '#F26522' }}>{Number(o.price).toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: '#6B7280' }}>ريال</div>
+            </div>
+          </div>
+          {o.companies?.bio && <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.6, marginBottom: 8 }}>{o.companies.bio}</div>}
+          {(o.companies?.website || o.companies?.google_maps) && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {o.companies?.website && <a href={o.companies.website} target="_blank" rel="noopener" style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>🌐 الموقع</a>}
+              {o.companies?.google_maps && <a href={o.companies.google_maps} target="_blank" rel="noopener" style={{ background: '#F0FDF4', color: '#16A34A', borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>📍 الخريطة</a>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ padding: '30px 16px 0' }}>
+        <div style={{ display: 'flex', background: 'white', borderRadius: 12, padding: 4, marginBottom: 16, border: '1px solid #E5E7EB' }}>
+          {tabs.map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 9, background: activeTab === tab.id ? '#F26522' : 'none', color: activeTab === tab.id ? 'white' : '#6B7280', fontFamily: 'inherit', fontWeight: activeTab === tab.id ? 700 : 500, fontSize: 12, cursor: 'pointer', transition: 'all .2s' }}>
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── تبويب الخدمات ── */}
+        {activeTab === 'services' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* معلومات الرحلة العامة */}
+            <div style={{ background: 'white', borderRadius: 14, padding: '14px 16px', border: '1px solid #E5E7EB' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 10 }}>📋 معلومات الرحلة</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  ['👥 المسافرون', `${svc.adults || o.trip_requests?.travelers} ${svc.children > 0 ? `+ ${svc.children} أطفال` : 'بالغين'}`],
+                  ['📅 المغادرة', svc.dateFrom || '—'],
+                  ['📅 العودة', svc.dateTo || '—'],
+                  ['🌍 الوجهة', o.trip_requests?.destination || '—'],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ background: '#F9FAFB', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 11, color: '#6B7280' }}>{label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* مسار الرحلة */}
+            {cities.length > 0 && (
+              <div style={{ background: 'white', borderRadius: 14, padding: '14px 16px', border: '1px solid #E5E7EB' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 10 }}>🗺️ مسار الرحلة</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {cities.map((c, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#FFF4EE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#F26522', flexShrink: 0 }}>{i + 1}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>🏙️ {c.city}</div>
+                        <div style={{ fontSize: 11, color: '#6B7280' }}>{c.from} → {c.to} · {Math.ceil((new Date(c.to) - new Date(c.from)) / (1000*60*60*24))} ليلة</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* الخدمات المفصلة */}
+            {o.offer_items && o.offer_items.length > 0 ? (
+              o.offer_items.map((item, idx) => (
+                <div key={idx} style={{ background: 'white', borderRadius: 14, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+                  <div style={{ background: '#F9FAFB', padding: '10px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{getServiceIcon(item.type)} {item.label}</div>
+                    {o.show_item_prices && item.price > 0 && (
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#F26522' }}>{Number(item.price).toLocaleString()} ريال</div>
+                    )}
+                  </div>
+                  {item.details && (
+                    <div style={{ padding: '10px 16px', fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{item.details}</div>
+                  )}
+                </div>
+              ))
+            ) : (
+              /* عرض قديم بدون offer_items */
+              <div style={{ background: 'white', borderRadius: 14, padding: '14px 16px', border: '1px solid #E5E7EB' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 10 }}>🛎️ الخدمات المشمولة</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    [svc.flight, '✈️', 'طيران دولي'],
+                    [svc.visa, '📄', 'تأشيرة سياحية'],
+                    [svc.arrival, '🚖', `استقبال مطار${svc.arrVip ? ' VIP' : ''}`],
+                    [svc.departure, '🛫', `توديع مطار${svc.depVip ? ' VIP' : ''}`],
+                    [svc.car, '🚗', `سيارة بسائق (${svc.carDays || 'طوال الرحلة'})`],
+                    [svc.hotel, '🏨', 'فنادق'],
+                    [svc.sim, '📱', `شرائح جوال (${svc.simQty || 1} شرائح - 20 قيقا)`],
+                    [svc.tickets, '🎟️', 'تذاكر سياحية'],
+                    [svc.program, '📋', 'برنامج سياحي يومي'],
+                  ].filter(([included]) => included).map(([, icon, label]) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #F3F4F6' }}>
+                      <span style={{ fontSize: 18 }}>{icon}</span>
+                      <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{label}</span>
+                      <span style={{ marginRight: 'auto', color: '#16A34A', fontWeight: 700, fontSize: 12 }}>✓ مشمول</span>
+                    </div>
+                  ))}
+                </div>
+                {o.description && <div style={{ marginTop: 12, fontSize: 13, color: '#6B7280', lineHeight: 1.6, background: '#F9FAFB', borderRadius: 8, padding: '10px' }}>{o.description}</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── تبويب البرنامج ── */}
+        {activeTab === 'program' && (
+          <div>
+            {programDays.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {programDays.map((day, i) => (
+                  <div key={i} style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+                    <div style={{ background: 'linear-gradient(135deg,#F26522,#D4521A)', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>اليوم {day.day}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: 'white' }}>🏙️ {day.city}</div>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{day.from}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{day.nights} ليلة</div>
+                      </div>
+                    </div>
+                    <div style={{ padding: '14px 16px' }}>
+{program[day.day] ? (
+                        <div style={{fontSize:13,color:'#374151',lineHeight:1.8,whiteSpace:'pre-wrap'}}>{program[day.day]}</div>
+                      ) : (
+                        <button onClick={()=>generateDayProgram(day)} disabled={loadingProgram[day.day]} style={{width:'100%',background:loadingProgram[day.day]?'#F3F4F6':'linear-gradient(135deg,#F26522,#D4521A)',color:loadingProgram[day.day]?'#6B7280':'white',border:'none',borderRadius:10,padding:'12px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:loadingProgram[day.day]?'not-allowed':'pointer'}}>
+                          {loadingProgram[day.day] ? '⏳ جاري توليد البرنامج...' : '🤖 توليد البرنامج بالذكاء الاصطناعي'}
+                        </button>
+                      )}                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: 'white', borderRadius: 14, padding: '40px 20px', textAlign: 'center', border: '1px solid #E5E7EB' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
+                <div style={{ fontSize: 15, color: '#6B7280' }}>لم يتم إضافة مسار رحلة</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── تبويب الفاتورة ── */}
+        {activeTab === 'invoice' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* جدول الخدمات والأسعار */}
+            <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+              <div style={{ background: '#F9FAFB', padding: '12px 16px', borderBottom: '1px solid #E5E7EB' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>📋 تفصيل الأسعار</div>
+              </div>
+              {o.offer_items && o.offer_items.length > 0 ? (
+                <div>
+                  {o.offer_items.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: idx < o.offer_items.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FAFAFA' : 'white' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{getServiceIcon(item.type)} {item.label}</div>
+                        {item.details && <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{item.details}</div>}
+                      </div>
+                      {o.show_item_prices ? (
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#F26522', flexShrink: 0, marginRight: 8 }}>
+                          {item.price > 0 ? `${Number(item.price).toLocaleString()} ريال` : 'مشمول'}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: '#16A34A', fontWeight: 600, flexShrink: 0 }}>✓ مشمول</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: '14px 16px', fontSize: 13, color: '#6B7280', textAlign: 'center' }}>
+                  لا تفاصيل متاحة لهذا العرض
+                </div>
+              )}
+              {/* الإجمالي */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: '#FFF4EE', borderTop: '2px solid #F26522' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>💰 السعر الإجمالي</div>
+                <div style={{ fontSize: 24, fontWeight: 900, color: '#F26522' }}>{Number(o.price).toLocaleString()} <span style={{ fontSize: 13, fontWeight: 400, color: '#6B7280' }}>ريال</span></div>
+              </div>
+            </div>
+
+            {/* صلاحية العرض */}
+            {o.offer_duration_hours && (
+              <div style={{ background: '#FEF3C7', borderRadius: 12, padding: '12px 16px', border: '1px solid #FCD34D', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 20 }}>⏱</span>
+                <div style={{ fontSize: 13, color: '#92400E', fontWeight: 600 }}>
+                  صلاحية العرض: {o.offer_duration_hours} ساعة من تاريخ الإرسال
+                </div>
+              </div>
+            )}
+
+            {/* طرق الدفع - تظهر فقط عند قبول العرض */}
+            {o.status === 'accepted' && o.payment_methods && o.payment_methods.length > 0 ? (
+              <div style={{ background: 'white', borderRadius: 14, padding: '16px', border: '1.5px solid #16A34A' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 12 }}>💳 طرق الدفع المتاحة</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                  {o.payment_methods.map(p => (
+                    <span key={p} style={{ background: '#F0FDF4', color: '#16A34A', borderRadius: 20, padding: '5px 14px', fontSize: 13, fontWeight: 700, border: '1px solid #86EFAC' }}>{p}</span>
+                  ))}
+                </div>
+                <div style={{ background: '#F0FDF4', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#16A34A', fontWeight: 600, textAlign: 'center' }}>
+                  📞 تواصل مع الشركة لإتمام عملية الدفع
+                </div>
+              </div>
+            ) : o.status === 'pending' ? (
+              <div style={{ background: '#F9FAFB', borderRadius: 12, padding: '12px 16px', border: '1px solid #E5E7EB', textAlign: 'center' }}>
+                <div style={{ fontSize: 13, color: '#6B7280' }}>💳 طرق الدفع ستظهر بعد قبول العرض</div>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* أزرار القرار — ثابتة في الأسفل */}
+      {o.status === 'pending' && (
+        <div style={{ position: 'fixed', bottom: 0, right: 0, left: 0, background: 'white', borderTop: '1px solid #E5E7EB', padding: '12px 16px', boxShadow: '0 -4px 20px rgba(0,0,0,0.08)', zIndex: 50 }}>
+          <div style={{ maxWidth: 430, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => onAccept(o.id, o.request_id)} style={{ width: '100%', background: 'linear-gradient(135deg,#F26522,#D4521A)', color: 'white', border: 'none', borderRadius: 12, padding: '14px', fontFamily: 'inherit', fontWeight: 800, fontSize: 15, cursor: 'pointer', boxShadow: '0 6px 20px rgba(242,101,34,0.4)' }}>
+              ✅ قبول العرض
+            </button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {!t?.negotiation_done ? (
+                <button onClick={() => onNegotiate(o.id, o.request_id, o.price)} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 12, padding: '12px', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                  🤝 طلب تفاوض
+                </button>
+              ) : (
+                <button disabled style={{ background: '#F3F4F6', color: '#9CA3AF', border: '1px solid #E5E7EB', borderRadius: 12, padding: '12px', fontFamily: 'inherit', fontSize: 13, cursor: 'not-allowed' }}>
+                  🚫 تم التفاوض
+                </button>
+              )}
+              <button onClick={() => setShowRejectModal(true)} style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 12, padding: '12px', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                ❌ رفض العرض
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {o.status === 'accepted' && (
+        <div style={{ position: 'fixed', bottom: 0, right: 0, left: 0, background: 'white', borderTop: '1px solid #E5E7EB', padding: '12px 16px', zIndex: 50 }}>
+          <div style={{ maxWidth: 430, margin: '0 auto' }}>
+            <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 12, padding: '12px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: '#16A34A' }}>
+              ✅ تم قبول هذا العرض
+            </div>
+          </div>
+        </div>
+      )}
+
+      {o.status === 'negotiating' && (
+        <div style={{ position: 'fixed', bottom: 0, right: 0, left: 0, background: 'white', borderTop: '1px solid #E5E7EB', padding: '12px 16px', zIndex: 50 }}>
+          <div style={{ maxWidth: 430, margin: '0 auto' }}>
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '12px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: '#2563EB' }}>
+              ⏸️ تم طلب التفاوض — انتظر عرضاً جديداً
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal رفض العرض */}
+      {showRejectModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div style={{ background: 'white', borderRadius: '20px 20px 0 0', padding: '24px 20px', width: '100%', maxWidth: 430 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#111827', marginBottom: 6 }}>❌ رفض العرض</div>
+            <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>ما سبب رفضك لهذا العرض؟</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {['السعر مرتفع', 'الخدمات غير مناسبة', 'تواريخ غير مناسبة', 'اخترت عرضاً آخر', 'سبب آخر'].map(reason => (
+                <button key={reason} onClick={() => setRejectReason(reason)} style={{ border: `1.5px solid ${rejectReason === reason ? '#DC2626' : '#E5E7EB'}`, background: rejectReason === reason ? '#FEF2F2' : 'white', color: rejectReason === reason ? '#DC2626' : '#374151', borderRadius: 10, padding: '10px 14px', fontFamily: 'inherit', fontWeight: rejectReason === reason ? 700 : 400, fontSize: 13, cursor: 'pointer', textAlign: 'right' }}>
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button onClick={() => setShowRejectModal(false)} style={{ background: '#F3F4F6', color: '#6B7280', border: 'none', borderRadius: 10, padding: '12px', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer' }}>
+                إلغاء
+              </button>
+              <button onClick={handleReject} disabled={!rejectReason} style={{ background: rejectReason ? 'linear-gradient(135deg,#DC2626,#B91C1C)' : '#F3F4F6', color: rejectReason ? 'white' : '#9CA3AF', border: 'none', borderRadius: 10, padding: '12px', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, cursor: rejectReason ? 'pointer' : 'not-allowed' }}>
+                تأكيد الرفض
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 const Trips = ()=>{
   const [trips, setTrips] = useState([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState(null)
+  const [selectedOffer, setSelectedOffer] = useState(null)
   const [tripOffers, setTripOffers] = useState({})
   const [filter, setFilter] = useState('all')
 
@@ -656,7 +1037,18 @@ const Trips = ()=>{
   })
 
   if (loading) return <div style={{textAlign:'center',padding:40,color:C.gray}}>جاري التحميل...</div>
-
+// صفحة تفاصيل العرض
+if (selectedOffer) {
+  const t = trips.find(x => x.id === selectedOffer.request_id)
+  return <OfferDetailPage 
+    offer={selectedOffer} 
+    trip={t}
+    onBack={()=>setSelectedOffer(null)}
+    onAccept={(offerId, tripId)=>{ acceptOffer(offerId, tripId); setSelectedOffer(null) }}
+    onNegotiate={(offerId, tripId, price)=>{ requestNegotiation(offerId, tripId, price); setSelectedOffer(null) }}
+    onReject={(offerId, tripId)=>{ rejectOffer(offerId, tripId); setSelectedOffer(null) }}
+  />
+}
   return(
     <div style={{padding:"16px 20px 24px"}}>
       <div style={{fontSize:20,fontWeight:900,color:C.ink,marginBottom:4}}>طلباتي 📋</div>
@@ -747,8 +1139,12 @@ const Trips = ()=>{
 
                         {/* تفاصيل العرض والسعر والأزرار */}
                         <div style={{padding:'10px 14px'}}>
-                          {o.description&&<div style={{fontSize:13,color:C.ink,lineHeight:1.6,marginBottom:10,background:C.muted,borderRadius:8,padding:'8px 10px'}}>{o.description}</div>}
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:C.light,borderRadius:10,padding:'10px 13px',marginBottom:10}}>
+{/* تفاصيل العرض */}
+<button onClick={()=>setSelectedOffer({...o, request_id: t.id})} style={{width:'100%',background:C.muted,color:C.ink,border:`1px solid ${C.border}`,borderRadius:9,padding:'8px',fontFamily:'inherit',fontSize:12,fontWeight:600,cursor:'pointer',marginBottom:8}}>
+  🔍 عرض التفاصيل الكاملة
+</button>
+
+{o.description && <div style={{fontSize:12,color:C.gray,background:C.muted,borderRadius:8,padding:'6px 10px',marginBottom:10}}>{o.description}</div>}                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:C.light,borderRadius:10,padding:'10px 13px',marginBottom:10}}>
                             <div style={{fontSize:13,fontWeight:600,color:C.gray}}>السعر الإجمالي</div>
                             <div style={{fontSize:20,fontWeight:800,color:C.orange}}>{o.price} <span style={{fontSize:11,fontWeight:400,color:C.gray}}>ريال</span></div>
                           </div>
