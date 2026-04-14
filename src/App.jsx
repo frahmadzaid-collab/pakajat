@@ -596,50 +596,55 @@ const Bookings = ()=>{
 // تُضاف في App.jsx داخل دالة Trips بدل الكود الحالي لـ selectedOffer
 
 const OfferDetailPage = ({ offer: o, trip: t, onBack, onAccept, onNegotiate, onReject }) => {
-  const [activeTab, setActiveTab] = useState('services')
+ const [activeTab, setActiveTab] = useState('services')
+const [showRejectModal, setShowRejectModal] = useState(false)
+const [rejectReason, setRejectReason] = useState('')
+const tabs = [
+  { id: 'services', label: 'الخدمات', icon: '🛎️' },
+  { id: 'program', label: 'البرنامج', icon: '📅' },
+  { id: 'invoice', label: 'الفاتورة', icon: '💰' },
+]
  const [program, setProgram] = useState({})
 const [loadingProgram, setLoadingProgram] = useState({})
 
 const generateDayProgram = async (day) => {
   if (program[day.day]) return
   setLoadingProgram(p => ({ ...p, [day.day]: true }))
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{
-        role: 'user',
-        content: `أنت مرشد سياحي خبير. اكتب برنامجاً سياحياً يومياً مفصلاً لـ ${svc?.adults || 2} بالغين في مدينة ${day.city} ليوم ${day.from}. البرنامج يشمل: الإفطار، الأنشطة الصباحية، الغداء، الأنشطة المسائية، العشاء. اذكر أسماء مطاعم حلال ومعالم سياحية حقيقية. اكتب بالعربية.`
-      }]
+  try {
+    const res = await fetch('https://uwmxximdupgfhfypdzll.supabase.co/functions/v1/quick-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({
+        type: 'generate_program',
+prompt: `أنت مرشد سياحي خبير. اكتب برنامجاً سياحياً يومياً لـ ${svc?.adults || 2} بالغين في مدينة ${day.city} ليوم ${day.from}.
+
+اكتب البرنامج بهذا التنسيق الثابت:
+
+🌅 الإفطار (٧:٠٠ - ٩:٠٠)
+اسم المطعم أو المكان + وصف مختصر
+
+🏛️ الصباح (٩:٠٠ - ١٢:٠٠)
+المعلم الأول + وصف
+المعلم الثاني + وصف
+
+🍽️ الغداء (١٢:٠٠ - ١٤:٠٠)
+اسم مطعم حلال + وصف
+
+🎯 المساء (١٤:٠٠ - ١٨:٠٠)
+النشاط المسائي + وصف
+
+🌙 العشاء (١٨:٠٠ - ٢٠:٠٠)
+اسم مطعم حلال + وصف
+
+اذكر أسماء حقيقية ومشهورة. اكتب بالعربية فقط. لا تضيف مقدمة أو خاتمة.`      })
     })
-  })
-  const data = await res.json()
-  const text = data.content?.[0]?.text || 'تعذر توليد البرنامج'
-  setProgram(p => ({ ...p, [day.day]: text }))
+    const data = await res.json()
+    setProgram(p => ({ ...p, [day.day]: data.text || 'تعذر توليد البرنامج' }))
+  } catch (e) {
+    setProgram(p => ({ ...p, [day.day]: 'تعذر توليد البرنامج — حاول مرة أخرى' }))
+  }
   setLoadingProgram(p => ({ ...p, [day.day]: false }))
 }
-  const [showRejectModal, setShowRejectModal] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
-  const [copied, setCopied] = useState('')
-
-  const tabs = [
-    { id: 'services', label: 'الخدمات', icon: '🛎️' },
-    { id: 'program', label: 'البرنامج', icon: '📅' },
-    { id: 'invoice', label: 'الفاتورة', icon: '💰' },
-  ]
-
-  const handleCopy = (text, key) => {
-    navigator.clipboard.writeText(text)
-    setCopied(key)
-    setTimeout(() => setCopied(''), 2000)
-  }
-
-  const handleReject = () => {
-    onReject(o.id, o.request_id, rejectReason)
-    setShowRejectModal(false)
-  }
 
   const svc = t?.services ? (typeof t.services === 'string' ? JSON.parse(t.services) : t.services) : {}
 
@@ -797,28 +802,36 @@ const generateDayProgram = async (day) => {
           <div>
             {programDays.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {programDays.map((day, i) => (
-                  <div key={i} style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
-                    <div style={{ background: 'linear-gradient(135deg,#F26522,#D4521A)', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>اليوم {day.day}</div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: 'white' }}>🏙️ {day.city}</div>
-                      </div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{day.from}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{day.nights} ليلة</div>
-                      </div>
-                    </div>
-                    <div style={{ padding: '14px 16px' }}>
-{program[day.day] ? (
-                        <div style={{fontSize:13,color:'#374151',lineHeight:1.8,whiteSpace:'pre-wrap'}}>{program[day.day]}</div>
-                      ) : (
-                        <button onClick={()=>generateDayProgram(day)} disabled={loadingProgram[day.day]} style={{width:'100%',background:loadingProgram[day.day]?'#F3F4F6':'linear-gradient(135deg,#F26522,#D4521A)',color:loadingProgram[day.day]?'#6B7280':'white',border:'none',borderRadius:10,padding:'12px',fontFamily:'inherit',fontWeight:700,fontSize:13,cursor:loadingProgram[day.day]?'not-allowed':'pointer'}}>
-                          {loadingProgram[day.day] ? '⏳ جاري توليد البرنامج...' : '🤖 توليد البرنامج بالذكاء الاصطناعي'}
-                        </button>
-                      )}                    </div>
-                  </div>
-                ))}
+{programDays.map((day, i) => (
+  <div key={i} style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: '1px solid #E5E7EB', marginBottom: 8 }}>
+    <div 
+      onClick={() => {
+        if (!program[day.day] && !loadingProgram[day.day]) generateDayProgram(day)
+        setActiveTab(activeTab === `day_${day.day}` ? 'program' : `day_${day.day}`)
+      }}
+      style={{ background: 'linear-gradient(135deg,#F26522,#D4521A)', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+    >
+      <div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>{day.from} · {day.city}</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: 'white' }}>اليوم {day.day}</div>
+      </div>
+      <div style={{ color: 'white', fontSize: 18 }}>
+        {loadingProgram[day.day] ? '⏳' : activeTab === `day_${day.day}` ? '▲' : '▼'}
+      </div>
+    </div>
+    {activeTab === `day_${day.day}` && (
+      <div style={{ padding: '16px' }}>
+        {program[day.day] ? (
+          <div style={{ fontSize: 13, color: '#374151', lineHeight: 2, whiteSpace: 'pre-wrap' }}>{program[day.day]}</div>
+        ) : loadingProgram[day.day] ? (
+          <div style={{ textAlign: 'center', padding: '20px', color: '#F26522', fontWeight: 600 }}>⏳ جاري توليد البرنامج...</div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '20px', color: '#6B7280' }}>اضغط مرة أخرى لتوليد البرنامج</div>
+        )}
+      </div>
+    )}
+  </div>
+))}
               </div>
             ) : (
               <div style={{ background: 'white', borderRadius: 14, padding: '40px 20px', textAlign: 'center', border: '1px solid #E5E7EB' }}>
